@@ -22,6 +22,7 @@
     
     <script>
         tailwind.config = {
+            darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
@@ -58,6 +59,55 @@
             background: rgba(30, 41, 59, 0.7);
             backdrop-filter: blur(12px);
             border: 1px solid rgba(99, 102, 241, 0.2);
+        }
+        /* 日间模式：glass-card 用浅色 */
+        :root:not(.dark) .glass-card {
+            background: rgba(255, 255, 255, 0.75);
+            border: 1px solid rgba(99, 102, 241, 0.15);
+        }
+        /* 日间模式：code-block 用浅灰 */
+        :root:not(.dark) .code-block {
+            background: #f6f8fa;
+            border-color: #d0d7de;
+        }
+        /* 日间模式：demo-input 浅色 */
+        :root:not(.dark) .demo-input {
+            background: rgba(248, 250, 252, 0.9);
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+        /* 日间模式：status-bar 浅底 */
+        :root:not(.dark) .status-bar {
+            background: rgba(0, 0, 0, 0.06);
+        }
+        /* 日间模式：text-gray-300/400/500 自动加深（覆盖 Tailwind 默认浅灰文本） */
+        :root:not(.dark) .text-gray-300 { color: #475569 !important; }
+        :root:not(.dark) .text-gray-400 { color: #64748b !important; }
+        :root:not(.dark) .text-gray-500 { color: #94a3b8 !important; }
+        :root:not(.dark) nav a.text-gray-300:hover { color: #6366f1 !important; }
+        /* 日间模式：feature-icon / 渐变图标背景保持但稍亮 */
+        :root:not(.dark) .feature-icon {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15));
+        }
+        /* 日间模式：particle 容器降低不透明度避免太花 */
+        :root:not(.dark) .particle-container { opacity: 0.5; }
+        /* 日间模式：bg-dark-light/50 步骤卡片改为浅灰 */
+        :root:not(.dark) .bg-dark-light\/50,
+        :root:not(.dark) .bg-dark-light {
+            background-color: rgba(241, 245, 249, 0.8) !important;
+        }
+        /* 日间模式：border-white/10 → 浅灰边框 */
+        :root:not(.dark) .border-white\/5,
+        :root:not(.dark) .border-white\/10,
+        :root:not(.dark) .border-white\/20 {
+            border-color: rgba(15, 23, 42, 0.1) !important;
+        }
+        /* 日间模式：bg-white/10 标签背景改为浅灰 */
+        :root:not(.dark) .bg-white\/10 {
+            background-color: rgba(15, 23, 42, 0.06) !important;
+        }
+        /* 日间模式：hover:bg-white/10 → 浅灰 hover */
+        :root:not(.dark) .hover\:bg-white\/10:hover {
+            background-color: rgba(15, 23, 42, 0.06) !important;
         }
         
         .glow {
@@ -154,7 +204,7 @@
         }
     </style>
 </head>
-<body class="bg-dark text-gray-100 overflow-x-hidden">
+<body class="bg-slate-50 dark:bg-dark text-slate-800 dark:text-gray-100 overflow-x-hidden transition-colors">
 
     <!-- Navigation -->
     <nav class="fixed top-0 left-0 right-0 z-50 glass-card border-b border-white/5">
@@ -177,6 +227,10 @@
                     <span class="tag bg-primary/20 text-primary border border-primary/30">
                         <i class="fas fa-robot mr-1.5 text-xs"></i>TRAE AI 创造力大赛
                     </span>
+                    <button id="theme-toggle" class="w-9 h-9 rounded-lg border border-slate-300 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10 transition flex items-center justify-center" title="切换日间/夜间模式">
+                        <i class="fas fa-moon text-slate-600 dark:hidden"></i>
+                        <i class="fas fa-sun text-amber-400 hidden dark:inline"></i>
+                    </button>
                 </div>
             </div>
         </div>
@@ -396,7 +450,7 @@
             <div class="glass-card rounded-2xl p-3 md:p-4 scroll-reveal overflow-hidden">
                 <!-- 直接嵌入 Demo 编辑器，全屏交互 -->
                 <div class="rounded-xl overflow-hidden border border-white/10" style="height: 80vh; min-height: 560px;">
-                    <iframe src="demo/index.html" class="w-full h-full" style="border:0;background:#f8fafc;" title="CodeGraph Demo 编辑器"></iframe>
+                    <iframe id="demo-frame" src="demo/index.html" class="w-full h-full" style="border:0;background:#f8fafc;" title="CodeGraph Demo 编辑器"></iframe>
                 </div>
                 <div class="flex flex-wrap items-center justify-center gap-3 mt-4 text-xs text-gray-400">
                     <span><i class="fas fa-hand-pointer mr-1"></i>拖拽节点</span>
@@ -618,10 +672,74 @@
     </footer>
 
     <script>
+        // ===== 主题切换（日间/夜间）=====
+        // 默认日间模式；localStorage 'cg_dark_landing' 记忆用户选择；未设置时跟随系统
+        function applyLandingTheme(dark) {
+            document.documentElement.classList.toggle('dark', dark);
+            try { window.localStorage.setItem('cg_dark_landing', dark ? '1' : '0'); } catch (_) {}
+            // 同步 mermaid 主题
+            if (window.mermaid) {
+                mermaid.initialize({
+                    startOnLoad: false,
+                    theme: dark ? 'dark' : 'default',
+                    themeVariables: {
+                        primaryColor: '#6366f1',
+                        primaryTextColor: '#fff',
+                        primaryBorderColor: '#8b5cf6',
+                        lineColor: '#6366f1',
+                        secondaryColor: '#1e293b',
+                        tertiaryColor: '#0f172a'
+                    }
+                });
+                // 重新渲染已存在的 mermaid 图
+                document.querySelectorAll('.mermaid').forEach(el => {
+                    if (el.getAttribute('data-processed')) {
+                        el.removeAttribute('data-processed');
+                        el.innerHTML = el.getAttribute('data-original') || el.textContent;
+                        try { mermaid.init(undefined, el); } catch (_) {}
+                    }
+                });
+            }
+            // 通知 iframe 内的 demo 同步主题
+            const frame = document.getElementById('demo-frame');
+            if (frame && frame.contentWindow) {
+                try { frame.contentWindow.postMessage({ type: 'cg-theme', dark }, '*'); } catch (_) {}
+            }
+        }
+
+        // 初始化主题
+        (function initTheme() {
+            let userSet = false;
+            try { userSet = window.localStorage.getItem('cg_dark_landing') !== null; } catch (_) {}
+            let dark = false;
+            if (userSet) {
+                try { dark = window.localStorage.getItem('cg_dark_landing') === '1'; } catch (_) {}
+            } else if (window.matchMedia) {
+                dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            }
+            applyLandingTheme(dark);
+            // 监听系统主题变化（用户未手动设置时跟随）
+            if (window.matchMedia && !userSet) {
+                const mql = window.matchMedia('(prefers-color-scheme: dark)');
+                const handler = (e) => {
+                    let stillUserSet = false;
+                    try { stillUserSet = window.localStorage.getItem('cg_dark_landing') !== null; } catch (_) {}
+                    if (!stillUserSet) applyLandingTheme(e.matches);
+                };
+                if (mql.addEventListener) mql.addEventListener('change', handler);
+                else if (mql.addListener) mql.addListener(handler);
+            }
+        })();
+
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            const dark = !document.documentElement.classList.contains('dark');
+            applyLandingTheme(dark);
+        });
+
         // Initialize Mermaid
         mermaid.initialize({ 
             startOnLoad: true,
-            theme: 'dark',
+            theme: 'default',
             themeVariables: {
                 primaryColor: '#6366f1',
                 primaryTextColor: '#fff',
@@ -863,6 +981,7 @@
                 easing: 'easeInQuad',
                 complete: () => {
                     diagramEl.innerHTML = demo.diagram;
+                    diagramEl.setAttribute('data-original', demo.diagram);
                     mermaid.init(undefined, diagramEl);
                     anime({
                         targets: diagramEl,

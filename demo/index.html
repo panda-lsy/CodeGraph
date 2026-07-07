@@ -433,7 +433,7 @@
   <link rel="stylesheet" href="../vendor/fontawesome/css/all.min.css">
 
   <script type="module">
-    import { CONFIG, loadRuntimeConfig, setDarkMode, fetchModels } from '../src/config.js';
+    import { CONFIG, loadRuntimeConfig, setDarkMode, fetchModels, getSystemDarkPref, watchSystemDarkMode } from '../src/config.js';
     import { textToDSL, looksLikeMermaid } from '../src/llm.js';
     import { validateDSL, normalizeDSL } from '../src/dsl.js';
     import { layoutWithDagre, dslToMermaid, mermaidToDSL } from '../src/layout.js';
@@ -484,7 +484,25 @@
       }
     }
     loadRuntimeConfig();
+    // 用户未手动设置过时，跟随系统 prefers-color-scheme
+    let userPrefDark = false;
+    try { userPrefDark = window.localStorage.getItem('cg_dark') !== null; } catch (_) {}
+    if (!userPrefDark) {
+      CONFIG.style.darkMode = getSystemDarkPref();
+    }
     applyDarkMode(CONFIG.style.darkMode);
+    // 监听系统夜间模式变化（仅用户未手动设置时跟随）
+    watchSystemDarkMode((isDark) => {
+      applyDarkMode(isDark);
+      if (typeof refreshPreview === 'function') refreshPreview();
+    });
+    // 接收父窗口（展示页）的主题同步消息
+    window.addEventListener('message', (e) => {
+      if (e.data && e.data.type === 'cg-theme' && typeof e.data.dark === 'boolean') {
+        applyDarkMode(e.data.dark);
+        if (typeof refreshPreview === 'function') refreshPreview();
+      }
+    });
     $('dark-toggle').addEventListener('click', () => {
       applyDarkMode(!CONFIG.style.darkMode);
       refreshPreview();

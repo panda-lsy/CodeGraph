@@ -66,6 +66,33 @@ export function setDarkMode(on) {
   return CONFIG.style.darkMode;
 }
 
+// 检测系统夜间模式偏好（prefers-color-scheme: dark）
+export function getSystemDarkPref() {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+// 注册系统夜间模式变化监听器，返回取消监听的函数
+// 用户未手动设置过（localStorage 无 cg_dark）时自动跟随系统
+export function watchSystemDarkMode(onChange) {
+  if (typeof window === 'undefined' || !window.matchMedia) return () => {};
+  const mql = window.matchMedia('(prefers-color-scheme: dark)');
+  const handler = (e) => {
+    // 仅在用户未手动设置时跟随系统
+    let userSet = false;
+    try { userSet = window.localStorage.getItem('cg_dark') !== null; } catch (_) {}
+    if (userSet) return;
+    if (typeof onChange === 'function') onChange(e.matches);
+  };
+  // addEventListener 在新版浏览器可用，老版本用 addListener
+  if (mql.addEventListener) mql.addEventListener('change', handler);
+  else if (mql.addListener) mql.addListener(handler);
+  return () => {
+    if (mql.removeEventListener) mql.removeEventListener('change', handler);
+    else if (mql.removeListener) mql.removeListener(handler);
+  };
+}
+
 // 透明背景开关
 export function setTransparent(on) {
   CONFIG.style.transparent = !!on;
