@@ -1201,7 +1201,7 @@
         btn.innerHTML = useAgentLoop
           ? '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Agent 闭环中...'
           : '<i class="fa-solid fa-spinner fa-spin mr-1"></i>AI 正在规划...';
-        $('canvas').innerHTML = `<div class="text-slate-400 text-sm"><i class="fa-solid fa-spinner fa-spin mr-1"></i>${useAgentLoop ? 'Designer↔Critic 多轮迭代中...' : '正在调用 LLM 生成 DSL...'}</div>`;
+        $('canvas').innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 text-sm"><i class="fa-solid fa-spinner fa-spin text-3xl mb-3"></i><span>${useAgentLoop ? 'Designer↔Critic 多轮迭代中...' : '正在调用 LLM 生成 DSL...'}</span></div>`;
 
         let norm, feedback = null, iterations = null;
 
@@ -1211,12 +1211,12 @@
             maxIter: 3,
             threshold: 90,
             onIteration: ({ round, total }) => {
-              $('canvas').innerHTML = `<div class="text-slate-400 text-sm"><i class="fa-solid fa-spinner fa-spin mr-1"></i>第 ${round} 轮迭代 · 当前评分 ${total}/100...</div>`;
+              $('canvas').innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 text-sm"><i class="fa-solid fa-spinner fa-spin text-3xl mb-3"></i><span>第 ${round} 轮迭代 · 当前评分 ${total}/100...</span></div>`;
             }
           });
           if (!result.dsl) {
             showStatus('err', `<i class="fa-solid fa-circle-xmark mr-1"></i>Designer 失败：${result.error}`);
-            $('canvas').innerHTML = '<div class="text-red-400 text-sm">生成失败</div>';
+            $('canvas').innerHTML = '<div class="absolute inset-0 flex flex-col items-center justify-center text-red-400 text-sm"><i class="fa-solid fa-circle-xmark text-3xl mb-3"></i><span>生成失败</span></div>';
             return;
           }
           norm = result.dsl;
@@ -1227,7 +1227,7 @@
           const { dsl, error } = await textToDSL(promptText);
           if (!dsl) {
             showStatus('err', `<i class="fa-solid fa-circle-xmark mr-1"></i>DSL 解析失败：${error}`);
-            $('canvas').innerHTML = '<div class="text-red-400 text-sm">生成失败</div>';
+            $('canvas').innerHTML = '<div class="absolute inset-0 flex flex-col items-center justify-center text-red-400 text-sm"><i class="fa-solid fa-circle-xmark text-3xl mb-3"></i><span>生成失败</span></div>';
             return;
           }
           norm = normalizeDSL(dsl);
@@ -1253,6 +1253,8 @@
 
         // 显示评分
         renderScorePanel(feedback, iterations);
+        // 生成成功后自动展开 DSL 面板
+        $('dsl-panel').classList.remove('hidden');
 
         const nodeCnt = (norm.nodes || []).length;
         const edgeCnt = (norm.edges || []).length;
@@ -1264,7 +1266,7 @@
       } catch (e) {
         console.error(e);
         showStatus('err', `<i class="fa-solid fa-circle-xmark mr-1"></i>${e.message}`);
-        $('canvas').innerHTML = `<div class="text-red-400 text-sm">${e.message}</div>`;
+        $('canvas').innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center text-red-400 text-sm"><i class="fa-solid fa-circle-xmark text-3xl mb-3"></i><span>${e.message}</span></div>`;
       } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles mr-1"></i>生成矢量图';
