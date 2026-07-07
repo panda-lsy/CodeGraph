@@ -1,12 +1,1631 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CodeGraph - Demo</title>
-    <meta http-equiv="refresh" content="0;url=../index.html">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeGraph Demo - 自然语言驱动的智能矢量绘图</title>
+
+  <!-- Tailwind CSS（CDN，预览环境若被拦截则回退内联样式） -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- dagre 布局引擎（本地化，避免 ORB 拦截） -->
+  <script src="../vendor/dagre.min.js"></script>
+  <!-- Mermaid（本地化） -->
+  <script src="../vendor/mermaid.min.js"></script>
+  <!-- Fabric.js（本地化，编辑器用） -->
+  <script src="../vendor/fabric.min.js"></script>
+  <!-- Resemble.js（本地化，视觉回归测试用） -->
+  <script src="../vendor/resemble.min.js"></script>
+  <!-- Drawflow（本地化，流程图编辑器） -->
+  <script src="../vendor/drawflow.min.js"></script>
+  <link rel="stylesheet" href="../vendor/drawflow.min.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: '#6366f1',
+            secondary: '#8b5cf6',
+            accent: '#06b6d4',
+            dark: '#0f172a',
+            'dark-light': '#1e293b'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .gradient-text {
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    /* 画布点阵背景 - 日夜适配 */
+    .cg-canvas { background-image: radial-gradient(circle, #cbd5e1 1px, transparent 1px); background-size: 20px 20px; background-color: #f8fafc; }
+    .dark .cg-canvas { background-image: radial-gradient(circle, #334155 1px, transparent 1px); background-color: #0f172a; }
+    .cg-canvas svg { max-width: 100%; height: auto; }
+    pre::-webkit-scrollbar { height: 8px; width: 8px; }
+    pre::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    .dark pre::-webkit-scrollbar-thumb { background: #475569; }
+    /* 组件库预览 */
+    .comp-preview svg { max-width: 100%; max-height: 50px; }
+    /* Git 风格 diff */
+    .diff-line { display: flex; font-family: 'Fira Code', 'Consolas', monospace; font-size: 12px; line-height: 1.6; padding: 0 4px; }
+    .diff-line .diff-no { width: 36px; color: #94a3b8; text-align: right; padding-right: 8px; user-select: none; flex-shrink: 0; }
+    .diff-line .diff-sign { width: 16px; flex-shrink: 0; user-select: none; font-weight: bold; }
+    .diff-line .diff-text { flex: 1; white-space: pre-wrap; word-break: break-all; }
+    .diff-line.same { color: #64748b; }
+    .diff-line.add { background: rgba(34,197,94,0.15); color: #15803d; }
+    .diff-line.add .diff-sign { color: #22c55e; }
+    .diff-line.del { background: rgba(239,68,68,0.15); color: #b91c1c; }
+    .diff-line.del .diff-sign { color: #ef4444; }
+    .dark .diff-line.same { color: #94a3b8; }
+    .dark .diff-line.add { background: rgba(34,197,94,0.2); color: #4ade80; }
+    .dark .diff-line.del { background: rgba(239,68,68,0.2); color: #f87171; }
+    /* Mermaid 代码提示徽章 */
+    .mermaid-badge { background: linear-gradient(135deg,#06b6d4,#6366f1); color: #fff; font-size: 10px; padding: 1px 6px; border-radius: 4px; }
+  </style>
 </head>
-<body>
-    <p>Demo 页面即将上线，正在跳转至展示页...</p>
+<body class="bg-slate-50 dark:bg-slate-950 min-h-screen text-slate-800 dark:text-slate-200 transition-colors">
+  <!-- 顶栏 -->
+  <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
+          <i class="fa-solid fa-diagram-project text-white"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold text-dark dark:text-white">CodeGraph <span class="gradient-text">Demo</span></h1>
+          <p class="text-xs text-slate-500 dark:text-slate-400">自然语言 → AI 代码 → 可编辑矢量图</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <!-- 当前工作区 -->
+        <a href="workspace.html" class="text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-1.5" title="切换 / 管理工作区">
+          <i class="fa-solid fa-folder-tree text-primary"></i>
+          <span id="current-ws" class="font-medium">默认工作区</span>
+          <i class="fa-solid fa-chevron-down text-[10px] opacity-60"></i>
+        </a>
+        <!-- 夜间模式切换 -->
+        <button id="dark-toggle" class="w-9 h-9 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center justify-center" title="切换日夜模式">
+          <i class="fa-solid fa-moon text-slate-600 dark:hidden"></i>
+          <i class="fa-solid fa-sun text-amber-400 hidden dark:inline"></i>
+        </button>
+        <a href="../index.html" class="text-sm text-slate-500 dark:text-slate-400 hover:text-primary transition">
+          <i class="fa-solid fa-arrow-left mr-1"></i>返回展示页
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <!-- 左侧：输入控制区 -->
+    <section class="lg:col-span-4 space-y-4">
+      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+        <label class="block text-sm font-semibold mb-1">描述你想要的图形</label>
+        <div id="input-mode-hint" class="text-xs text-slate-400 mb-2 min-h-[16px]"></div>
+        <textarea id="prompt" rows="5"
+          class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 dark:bg-slate-800 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary resize-none font-mono"
+          placeholder="支持两种输入：&#10;1. 自然语言：绘制 MOF-74 催化流程图，包括反应物、催化剂、产物&#10;2. Mermaid 代码：flowchart TB; A-->B（检测到 mermaid 关键词会直接渲染，语法错误 AI 自动修复）"></textarea>
+
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button data-example="化学" class="ex-btn text-xs px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-primary hover:text-white transition">化学流程</button>
+          <button data-example="架构" class="ex-btn text-xs px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-primary hover:text-white transition">系统架构</button>
+          <button data-example="教学" class="ex-btn text-xs px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-primary hover:text-white transition">概念图</button>
+          <button data-example="mermaid" class="ex-btn text-xs px-2.5 py-1 rounded-full bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-600 hover:text-white transition">Mermaid 示例</button>
+        </div>
+
+        <button id="generate"
+          class="mt-4 w-full py-2.5 rounded-lg bg-gradient-to-r from-primary to-secondary text-white text-sm font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed">
+          <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>生成矢量图
+        </button>
+      </div>
+
+      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">主题样式</label>
+          <select id="theme" class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 dark:bg-slate-800 rounded-lg focus:ring-2 focus:ring-primary">
+            <option value="Nature">Nature（论文风·圆角·浅蓝）</option>
+            <option value="Science">Science（学术风·蓝灰·直角）</option>
+            <option value="Modern">Modern（扁平风·紫调）</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">布局方向</label>
+          <select id="rankdir" class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 dark:bg-slate-800 rounded-lg focus:ring-2 focus:ring-primary">
+            <option value="TB">从上到下 (TB)</option>
+            <option value="LR">从左到右 (LR)</option>
+            <option value="BT">从下到上 (BT)</option>
+            <option value="RL">从右到左 (RL)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">渲染引擎</label>
+          <select id="engine" class="w-full px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 dark:bg-slate-800 rounded-lg focus:ring-2 focus:ring-primary">
+            <option value="dagre">dagre（自渲染 SVG·可编辑）</option>
+            <option value="mermaid">Mermaid（DSL 转换·对比）</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="checkbox" id="apply-constraints" checked class="w-4 h-4 rounded accent-primary">
+          <label for="apply-constraints" class="text-xs text-slate-600 dark:text-slate-400">应用约束求解器（对齐/等距/对称）</label>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="checkbox" id="agent-loop" class="w-4 h-4 rounded accent-primary">
+          <label for="agent-loop" class="text-xs text-slate-600 dark:text-slate-400">Agent 闭环（Designer↔Critic 多轮迭代）</label>
+        </div>
+      </div>
+
+      <div id="status" class="hidden rounded-xl border p-3 text-xs"></div>
+
+      <div class="bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 text-xs text-slate-600 dark:text-slate-400">
+        <div class="flex items-center justify-between mb-1">
+          <p class="font-semibold"><i class="fa-solid fa-circle-info mr-1"></i>LLM 接入</p>
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-slate-500 dark:text-slate-400">模型</label>
+            <select id="llm-model" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 dark:bg-slate-800 bg-white">
+              <option value="Doubao-Seed-2.0-mini">Doubao-Seed-2.0-mini</option>
+              <option value="qwen-plus">qwen-plus</option>
+              <option value="qwen3.5-plus">qwen3.5-plus (reasoning)</option>
+              <option value="gpt-4o-mini">gpt-4o-mini</option>
+              <option value="gpt-4o">gpt-4o</option>
+            </select>
+          </div>
+        </div>
+        <p>状态：<span id="llm-mode" class="font-mono">-</span></p>
+      </div>
+    </section>
+
+    <!-- 右侧：渲染与 DSL 预览 -->
+    <section class="lg:col-span-8 space-y-4">
+      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
+          <div class="flex items-center gap-3">
+            <h2 class="text-sm font-semibold">渲染结果</h2>
+            <!-- 合并：主题/夜间/透明 快捷控制 -->
+            <select id="theme-quick" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 dark:bg-slate-800">
+              <option value="Nature">Nature</option>
+              <option value="Science">Science</option>
+              <option value="Modern">Modern</option>
+            </select>
+            <button id="dark-quick" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="切换日间/夜间">
+              <i class="fa-solid fa-sun"></i>
+            </button>
+            <button id="transparent-quick" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="透明背景">
+              <i class="fa-solid fa-square"></i>
+            </button>
+            <button id="reset-view" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="重置视图">
+              <i class="fa-solid fa-arrows-to-circle"></i>
+            </button>
+            <button id="grid-toggle" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="切换网格显示">
+              <i class="fa-solid fa-border-all"></i>
+            </button>
+            <button id="snap-toggle" class="text-xs px-2 py-1 rounded border border-primary text-primary bg-indigo-50 dark:bg-indigo-950/40 transition" title="智能边界吸附">
+              <i class="fa-solid fa-magnet"></i>
+            </button>
+            <button id="connect-toggle" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="节点连接模式（点击两个节点创建边）">
+              <i class="fa-solid fa-link"></i>
+            </button>
+          </div>
+          <div class="flex gap-2 flex-wrap">
+            <button id="save-proj" class="text-xs px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50" disabled>
+              <i class="fa-solid fa-floppy-disk mr-1"></i>保存
+            </button>
+            <button id="load-proj" class="text-xs px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+              <i class="fa-solid fa-folder-open mr-1"></i>加载
+            </button>
+            <button id="export-btn" class="text-xs px-2.5 py-1 rounded bg-primary text-white hover:opacity-90 transition disabled:opacity-50" disabled>
+              <i class="fa-solid fa-download mr-1"></i>导出
+            </button>
+            <button id="toggle-dsl" class="text-xs px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+              <i class="fa-solid fa-code mr-1"></i>DSL
+            </button>
+          </div>
+        </div>
+        <!-- 画布（默认透明 + 无限，直接可交互） -->
+        <div id="canvas" class="cg-canvas min-h-[500px] relative overflow-hidden" style="background-image: linear-gradient(rgba(99,102,241,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.06) 1px, transparent 1px); background-size: 20px 20px;">
+          <div class="text-center text-slate-400 dark:text-slate-500 absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <i class="fa-solid fa-image text-5xl mb-3 opacity-40"></i>
+            <p class="text-sm">输入描述后点击「生成矢量图」</p>
+            <p class="text-xs mt-2 opacity-60">支持拖拽节点 · 双击编辑文本 · 滚轮缩放 · 空白处拖拽平移</p>
+          </div>
+        </div>
+        <!-- 编辑工具栏（默认显示） -->
+        <div class="px-4 py-2 border-t border-slate-200 dark:border-slate-800 flex flex-wrap gap-2 items-center text-xs text-slate-500 dark:text-slate-400">
+          <span><i class="fa-solid fa-hand-pointer mr-1"></i>拖拽节点移动</span>
+          <span class="opacity-40">·</span>
+          <span><i class="fa-solid fa-mouse-pointer mr-1"></i>双击编辑文本</span>
+          <span class="opacity-40">·</span>
+          <span><i class="fa-solid fa-arrows-up-down-left-right mr-1"></i>空白处拖拽平移</span>
+          <span class="opacity-40">·</span>
+          <span><i class="fa-solid fa-magnifying-glass mr-1"></i>滚轮缩放</span>
+          <span class="opacity-40">·</span>
+          <span><i class="fa-solid fa-shapes mr-1"></i>从右侧组件库拖入</span>
+          <div class="flex-1"></div>
+          <button id="edge-curve" class="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50" disabled title="切换为曲线">
+            <i class="fa-solid fa-bezier-curve mr-1"></i>曲线
+          </button>
+          <button id="edge-line" class="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50" disabled title="切换为直线">
+            <i class="fa-solid fa-minus mr-1"></i>直线
+          </button>
+          <button id="edge-delete" class="px-2.5 py-1 rounded border border-red-300 dark:border-red-800 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition disabled:opacity-50" disabled title="删除选中的边">
+            <i class="fa-solid fa-trash mr-1"></i>删除边
+          </button>
+          <button id="tool-delete" class="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50" disabled>
+            <i class="fa-solid fa-trash mr-1"></i>删除选中
+          </button>
+        </div>
+      </div>
+
+      <!-- 组件库（移到画布下方，便于拖入） -->
+      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
+        <p class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2"><i class="fa-solid fa-shapes mr-1"></i>组件库 <span class="font-normal opacity-60">（拖到上方画布添加 · 点击「添加节点」按钮选择）</span></p>
+        <div id="comp-grid" class="grid gap-2"></div>
+        <button id="tool-add-node-2" class="mt-2 w-full text-xs px-2.5 py-1.5 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <i class="fa-solid fa-plus mr-1"></i>添加节点（选择组件）
+        </button>
+      </div>
+
+      <!-- 评分面板（Agent 闭环时显示） -->
+      <div id="score-panel" class="hidden bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <h2 class="text-sm font-semibold">Critic 评审 <span class="text-xs text-slate-400 font-normal">四维评分</span></h2>
+          <span id="score-total" class="text-lg font-bold"></span>
+        </div>
+        <div class="p-5 space-y-3">
+          <div id="score-dimensions" class="grid grid-cols-2 gap-3"></div>
+          <div id="score-issues" class="text-xs space-y-1"></div>
+          <div id="score-iterations" class="text-xs text-slate-500"></div>
+        </div>
+      </div>
+
+      <div id="dsl-panel" class="hidden bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <h2 class="text-sm font-semibold">Graphic DSL <span class="text-xs text-slate-400 font-normal">v1.0</span></h2>
+          <span id="dsl-score" class="text-xs text-slate-500"></span>
+        </div>
+        <pre id="dsl-output" class="p-4 text-xs overflow-x-auto bg-slate-50 dark:bg-slate-950 max-h-80"></pre>
+      </div>
+
+      <!-- 视觉回归测试面板（基线按工作区隔离） -->
+      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <h2 class="text-sm font-semibold">视觉回归测试 <span class="text-xs text-slate-400 font-normal">Resemble.js</span> <span id="ws-badge" class="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300"></span></h2>
+          <div class="flex gap-2">
+            <button id="save-baseline" class="text-xs px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50" disabled>
+              <i class="fa-solid fa-flag mr-1"></i>保存基线
+            </button>
+            <button id="run-regression" class="text-xs px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50" disabled>
+              <i class="fa-solid fa-vial mr-1"></i>运行对比
+            </button>
+          </div>
+        </div>
+        <div class="p-5 space-y-3">
+          <div id="baseline-list" class="text-xs text-slate-500"></div>
+          <div id="regression-result" class="hidden"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Mermaid AI 修复 diff 对话框 -->
+  <div id="diff-modal" class="hidden fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col">
+      <div class="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-code-compare text-primary"></i>
+          <h3 class="text-sm font-semibold">AI 修复建议（Git 风格 diff）</h3>
+          <span id="diff-round" class="text-xs text-slate-400"></span>
+        </div>
+        <button id="diff-close" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div id="diff-body" class="p-4 overflow-auto flex-1 bg-slate-50 dark:bg-slate-950"></div>
+      <div class="px-5 py-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+        <div id="diff-status" class="text-xs text-slate-500"></div>
+        <div class="flex gap-2">
+          <button id="diff-retry" class="text-xs px-3 py-1.5 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            <i class="fa-solid fa-rotate mr-1"></i>再次 AI 修复
+          </button>
+          <button id="diff-apply" class="text-xs px-3 py-1.5 rounded bg-primary text-white hover:opacity-90 transition">
+            <i class="fa-solid fa-check mr-1"></i>应用更改
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Font Awesome（本地化，避免 CDN ORB 拦截） -->
+  <link rel="stylesheet" href="../vendor/fontawesome/css/all.min.css">
+
+  <script type="module">
+    import { CONFIG, loadRuntimeConfig, setDarkMode } from '../src/config.js';
+    import { textToDSL, looksLikeMermaid, fixMermaidWithAI } from '../src/llm.js';
+    import { validateDSL, normalizeDSL } from '../src/dsl.js';
+    import { layoutWithDagre, dslToMermaid } from '../src/layout.js';
+    import { layoutToSVG, recalcEdgePath, fitViewBox } from '../src/render.js';
+    import { renderComponent, getComponentLabel, listComponentsByCategory, getDefaultSize } from '../src/components.js';
+    import { scoreConstraints } from '../src/constraint.js';
+    import { designWithCritique } from '../src/designer.js';
+    import { evaluate } from '../src/critic.js';
+    import { buildAST, astToDSL, serializeAST, deserializeAST } from '../src/ast.js';
+    import { listProjects, saveProject, loadProject, deleteProject, exportToFile, importFromFile } from '../src/storage.js';
+    import { prompt, alert, confirm, select } from '../src/ui.js';
+    import { listBaselines, saveBaseline, compareWithBaseline, deleteBaseline, runRegressionSuite, setCurrentWorkspace, getCurrentWorkspace, getCurrentWorkspaceName, listWorkspaces, createWorkspace, renameWorkspace, deleteWorkspace } from '../src/regression.js';
+    import { initSVGEditor, tagNodes } from '../src/svg-editor.js';
+    import { initMermaidEditor, lineDiff, renderDiffHTML, normalizeMermaidSVG } from '../src/mermaid-editor.js';
+
+    const $ = id => document.getElementById(id);
+    const examples = {
+      '化学': '绘制 MOF-74 催化流程图，反应物用圆角矩形，催化剂用菱形，产物用矩形，包含反应物、溶剂热反应、催化剂和催化产物，约束反应物水平对齐',
+      '架构': '绘制一个系统架构图，包含客户端、API 网关、业务服务、数据库和缓存，数据库和缓存水平对齐',
+      '教学': '绘制光合作用概念图，包含光反应、暗反应、CO2、O2、葡萄糖，光反应和暗反应关于 CO2 对称',
+      'mermaid': 'flowchart TB\n    A[反应物 A] --> C[溶剂热反应]\n    B[反应物 B] --> C\n    C --> D[(MOF-74 催化剂)]\n    D --> E[催化产物]'
+    };
+
+    // 输入模式实时检测（自然语言 / Mermaid 代码）
+    function updateInputModeHint() {
+      const text = $('prompt').value;
+      const hint = $('input-mode-hint');
+      if (looksLikeMermaid(text)) {
+        hint.innerHTML = '<span class="mermaid-badge">Mermaid 代码</span> 将直接渲染（语法错误时 AI 自动修复）';
+      } else {
+        hint.textContent = '';
+      }
+    }
+    $('prompt').addEventListener('input', updateInputModeHint);
+    updateInputModeHint();
+
+    // 夜间模式初始化
+    function applyDarkMode(on) {
+      document.documentElement.classList.toggle('dark', on);
+      setDarkMode(on);
+    }
+    loadRuntimeConfig();
+    applyDarkMode(CONFIG.style.darkMode);
+    $('dark-toggle').addEventListener('click', () => {
+      applyDarkMode(!CONFIG.style.darkMode);
+    });
+
+    // LLM 状态显示（隐藏端点地址，仅显示模型和状态）
+    function updateLLMMode() {
+      loadRuntimeConfig();
+      $('llm-model').value = CONFIG.llm.model;
+      $('llm-mode').textContent = CONFIG.llm.useMock ? 'mock 离线模式' : `在线（${CONFIG.llm.model}）`;
+    }
+    updateLLMMode();
+    // 模型选择
+    $('llm-model').addEventListener('change', () => {
+      CONFIG.llm.model = $('llm-model').value;
+      try { window.localStorage.setItem('cg_model', CONFIG.llm.model); } catch (e) {}
+      updateLLMMode();
+      showStatus('info', `<i class="fa-solid fa-circle-info mr-1"></i>已切换模型：${CONFIG.llm.model}`);
+    });
+    // 从 localStorage 恢复模型选择
+    try {
+      const savedModel = window.localStorage.getItem('cg_model');
+      if (savedModel) {
+        CONFIG.llm.model = savedModel;
+        $('llm-model').value = savedModel;
+        updateLLMMode();
+      }
+    } catch (e) {}
+
+    // 工作区显示：在顶栏展示当前工作区名称
+    function updateWorkspaceDisplay() {
+      $('current-ws').textContent = getCurrentWorkspaceName();
+    }
+    updateWorkspaceDisplay();
+
+    // 组件库预览渲染（按分类展示，分类标题独占一行，默认折叠）
+    function renderCompGrid() {
+      const grid = $('comp-grid');
+      const byCat = listComponentsByCategory();
+      const catLabels = { basic: '基础形状', it: 'IT 类', chemistry: '化学类', annotation: '标注', other: '其他' };
+      const catIcons = { basic: 'fa-square', it: 'fa-database', chemistry: 'fa-flask', annotation: 'fa-note-sticky', other: 'fa-shapes' };
+      const t = { fill: '#e0e7ff', stroke: '#6366f1', textColor: '#312e81', fontSize: 8, fontFamily: 'sans-serif', rx: 6, strokeWidth: 1.5, edgeColor: '#6366f1' };
+      let html = '';
+      Object.keys(byCat).forEach(cat => {
+        const compsHtml = byCat[cat].map(c => {
+          const size = getDefaultSize(c.name);
+          const previewW = Math.min(size.width, 64);
+          const previewH = Math.min(size.height, 40);
+          const node = { x: 0, y: 0, width: previewW, height: previewH, text: '', component: c.name };
+          const inner = renderComponent(node, t)
+            .replace(/transform="translate\(0,0\)"/, '')
+            .replace(/<g class="cg-node">\s*/, '')
+            .replace(/\s*<\/g>\s*$/, '');
+          const svg = `<svg viewBox="0 0 ${previewW} ${previewH}" width="${previewW}" height="${previewH}">${inner}</svg>`;
+          return `<div class="comp-preview p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:border-primary hover:bg-indigo-50 dark:hover:bg-slate-700 flex flex-col items-center justify-center gap-1 cursor-grab transition" draggable="true" data-component="${c.name}" title="${c.name}: ${c.description || c.label}（拖到画布添加）">
+            ${svg}
+            <span class="text-[10px] text-slate-500 dark:text-slate-400 leading-tight text-center">${c.label}</span>
+          </div>`;
+        }).join('');
+        // 每个分类用 details 折叠（默认折叠）
+        html += `<details class="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden mb-2">
+          <summary class="text-xs font-semibold text-slate-500 dark:text-slate-400 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1 select-none">
+            <i class="fa-solid ${catIcons[cat] || 'fa-shapes'}"></i>
+            ${catLabels[cat] || cat}
+            <span class="opacity-50 font-normal">（${byCat[cat].length}）</span>
+            <i class="fa-solid fa-chevron-down ml-auto opacity-40 text-[10px]"></i>
+          </summary>
+          <div class="p-2 grid gap-2 grid-cols-4 sm:grid-cols-6 bg-slate-50 dark:bg-slate-900/50">${compsHtml}</div>
+        </details>`;
+      });
+      grid.classList.remove('grid-cols-3', 'grid-cols-4', 'grid-cols-6', 'md:grid-cols-8');
+      grid.innerHTML = html;
+    }
+    renderCompGrid();
+
+    // 示例按钮
+    document.querySelectorAll('.ex-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $('prompt').value = examples[btn.dataset.example] || '';
+        updateInputModeHint();
+      });
+    });
+
+    // 状态提示
+    function showStatus(type, msg) {
+      const el = $('status');
+      el.classList.remove('hidden', 'bg-green-50', 'bg-red-50', 'bg-amber-50', 'text-green-700', 'text-red-700', 'text-amber-700', 'border-green-200', 'border-red-200', 'border-amber-200',
+        'dark:bg-green-950', 'dark:bg-red-950', 'dark:bg-amber-950', 'dark:text-green-300', 'dark:text-red-300', 'dark:text-amber-300', 'dark:border-green-800', 'dark:border-red-800', 'dark:border-amber-800');
+      const map = {
+        ok: ['bg-green-50', 'text-green-700', 'border-green-200', 'dark:bg-green-950', 'dark:text-green-300', 'dark:border-green-800'],
+        err: ['bg-red-50', 'text-red-700', 'border-red-200', 'dark:bg-red-950', 'dark:text-red-300', 'dark:border-red-800'],
+        info: ['bg-amber-50', 'text-amber-700', 'border-amber-200', 'dark:bg-amber-950', 'dark:text-amber-300', 'dark:border-amber-800']
+      };
+      el.classList.add(...(map[type] || map.info));
+      el.innerHTML = msg;
+    }
+
+    // 全局状态：当前 DSL / Layout / AST / SVG 编辑器实例 / Mermaid 源码
+    let currentDSL = null, currentLayout = null, currentAST = null, currentSVGEeditor = null, currentPrompt = '';
+    let currentMermaidCode = null; // Mermaid 模式下的源码（用于编辑回写）
+    let selectedNodeId = null; // 当前选中的节点（用于删除）
+    let selectedEdgeIdx = null; // 当前选中的边索引（用于边编辑）
+    let snapEnabled = true; // 智能吸附开关
+    let gridVisible = true; // 网格显示开关
+
+    // 重新渲染选中边的拐点 handles
+    function refreshWaypoints() {
+      if (!currentSVGEeditor || selectedEdgeIdx === null || !currentLayout) {
+        if (currentSVGEeditor) currentSVGEeditor.clearWaypoints();
+        return;
+      }
+      const edge = currentLayout.edges[selectedEdgeIdx];
+      if (!edge) return;
+      const pts = edge.points || [];
+      currentSVGEeditor.showWaypoints(String(selectedEdgeIdx), pts);
+    }
+
+    // 边选中回调
+    function onEdgeSelect(edgeId) {
+      if (edgeId === null) {
+        selectedEdgeIdx = null;
+        $('edge-curve').disabled = true;
+        $('edge-line').disabled = true;
+        $('edge-delete').disabled = true;
+        if (currentSVGEeditor) currentSVGEeditor.clearWaypoints();
+        return;
+      }
+      selectedEdgeIdx = parseInt(edgeId);
+      $('edge-curve').disabled = false;
+      $('edge-line').disabled = false;
+      $('edge-delete').disabled = false;
+      refreshWaypoints();
+    }
+
+    // 创建边回调（连接模式）
+    function onEdgeCreate(fromId, toId) {
+      if (!currentDSL || !currentLayout) return;
+      // 避免重复边
+      const exists = (currentLayout.edges || []).some(e => e.from === fromId && e.to === toId);
+      if (exists) {
+        showStatus('info', '<i class="fa-solid fa-circle-info mr-1"></i>边已存在');
+        return;
+      }
+      const fromNode = (currentLayout.nodes || []).find(n => n.id === fromId);
+      const toNode = (currentLayout.nodes || []).find(n => n.id === toId);
+      if (!fromNode || !toNode) return;
+      const edge = { from: fromId, to: toId, type: 'arrow', style: 'curve', points: [
+        { x: fromNode.x + fromNode.width / 2, y: fromNode.y + fromNode.height / 2 },
+        { x: toNode.x + toNode.width / 2, y: toNode.y + toNode.height / 2 }
+      ]};
+      currentLayout.edges = currentLayout.edges || [];
+      currentLayout.edges.push(edge);
+      currentDSL.edges = currentDSL.edges || [];
+      currentDSL.edges.push({ from: fromId, to: toId, type: 'arrow', style: 'curve' });
+      if (currentAST) {
+        currentAST.children.push({ type: 'edge', from: fromId, to: toId, style: 'curve' });
+      }
+      // 重新渲染（保留 viewBox 和选中状态）
+      const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
+      renderResult(currentLayout, currentDSL);
+      if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
+      $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
+      showStatus('ok', `<i class="fa-solid fa-link mr-1"></i>已创建边 ${fromId} → ${toId}`);
+    }
+
+    // 添加拐点回调
+    function onEdgeAddWaypoint(edgeId, x, y) {
+      if (!currentLayout) return;
+      const idx = parseInt(edgeId);
+      const edge = currentLayout.edges[idx];
+      if (!edge) return;
+      edge.points = edge.points || [];
+      // 在末尾（终点前）插入拐点
+      edge.points.splice(edge.points.length - 1, 0, { x, y });
+      edge.style = 'line'; // 有拐点时用折线
+      // 重新渲染该边
+      const svg = $('canvas').querySelector('svg');
+      if (svg) {
+        const edgeEls = svg.querySelectorAll('.cg-edge path');
+        if (edgeEls[idx]) {
+          const newPath = recalcEdgePath(currentLayout, edge);
+          if (newPath) edgeEls[idx].setAttribute('d', newPath);
+        }
+      }
+      refreshWaypoints();
+      // 同步 DSL
+      if (currentDSL) {
+        const dslEdge = (currentDSL.edges || [])[idx];
+        if (dslEdge) dslEdge.style = 'line';
+        $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
+      }
+      showStatus('info', '<i class="fa-solid fa-circle-info mr-1"></i>已添加拐点（可拖拽移动）');
+    }
+
+    // 移动拐点回调
+    function onEdgeUpdateWaypoint(edgeId, wpIdx, x, y) {
+      if (!currentLayout) return;
+      const idx = parseInt(edgeId);
+      const edge = currentLayout.edges[idx];
+      if (!edge || !edge.points) return;
+      if (edge.points[wpIdx]) {
+        edge.points[wpIdx] = { x, y };
+        // 重新计算边的 path
+        const svg = $('canvas').querySelector('svg');
+        if (svg) {
+          const edgeEls = svg.querySelectorAll('.cg-edge path');
+          if (edgeEls[idx]) {
+            const newPath = recalcEdgePath(currentLayout, edge);
+            if (newPath) edgeEls[idx].setAttribute('d', newPath);
+          }
+        }
+        // 更新拐点 handle 位置
+        const handle = svg.querySelector(`.cg-waypoint[data-edge-id="${edgeId}"][data-wp-idx="${wpIdx}"]`);
+        if (handle) {
+          handle.setAttribute('cx', x);
+          handle.setAttribute('cy', y);
+        }
+      }
+    }
+
+    // 渲染评分面板
+    function renderScorePanel(feedback, iterations) {
+      if (!feedback) {
+        $('score-panel').classList.add('hidden');
+        return;
+      }
+      $('score-panel').classList.remove('hidden');
+      const t = feedback.total;
+      const color = t >= 90 ? 'text-green-500' : t >= 70 ? 'text-amber-500' : 'text-red-500';
+      $('score-total').className = `text-lg font-bold ${color}`;
+      $('score-total').textContent = `${t}/100${feedback.pass ? ' ✓' : ''}`;
+
+      const dims = feedback.dimensions;
+      const dimLabels = { completeness: '内容完整度', alignment: '对齐合理度', visualBalance: '视觉平衡', readability: '可读性' };
+      $('score-dimensions').innerHTML = Object.keys(dims).map(k => {
+        const v = dims[k];
+        const pct = (v / 25 * 100).toFixed(0);
+        const c = v >= 22 ? 'bg-green-400' : v >= 15 ? 'bg-amber-400' : 'bg-red-400';
+        return `<div>
+          <div class="flex justify-between text-xs mb-1"><span>${dimLabels[k]}</span><span>${v}/25</span></div>
+          <div class="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+            <div class="h-full ${c}" style="width:${pct}%"></div>
+          </div>
+        </div>`;
+      }).join('');
+
+      $('score-issues').innerHTML = feedback.issues.length
+        ? feedback.issues.map(i => `<div class="text-amber-600 dark:text-amber-400"><i class="fa-solid fa-circle-exclamation mr-1"></i>${i}</div>`).join('')
+        : '<div class="text-green-600"><i class="fa-solid fa-circle-check mr-1"></i>无问题</div>';
+
+      if (iterations && iterations.length > 1) {
+        const scores = iterations.map(i => i.feedback?.total || 0);
+        $('score-iterations').innerHTML = `<i class="fa-solid fa-arrows-rotate mr-1"></i>迭代 ${iterations.length} 轮 · 分数变化：${scores.join(' → ')}`;
+      } else {
+        $('score-iterations').textContent = '';
+      }
+    }
+
+    // 节点拖拽后回调：更新 layout.nodes 坐标 + 重新计算关联边 + 更新 SVG path
+    function onNodeDrag(nodeId, x, y) {
+      if (!currentLayout) return;
+      const node = (currentLayout.nodes || []).find(n => n.id === nodeId);
+      if (!node) return;
+      node.x = x; node.y = y;
+      node.cx = x + node.width / 2;
+      node.cy = y + node.height / 2;
+      // 重新计算关联边
+      const svg = $('canvas').querySelector('svg');
+      if (!svg) return;
+      const edgeEls = svg.querySelectorAll('.cg-edge path');
+      (currentLayout.edges || []).forEach((edge, idx) => {
+        if (edge.from !== nodeId && edge.to !== nodeId) return;
+        const newPath = recalcEdgePath(currentLayout, edge);
+        if (newPath && edgeEls[idx]) edgeEls[idx].setAttribute('d', newPath);
+      });
+      // 同步 AST
+      if (currentAST) {
+        const astNode = currentAST.children.find(c => c.id === nodeId);
+        if (astNode) { astNode.x = x; astNode.y = y; }
+      }
+    }
+
+    // 节点文本编辑后回调：更新 DSL + layout + AST
+    function onNodeTextEdit(nodeId, newText) {
+      if (currentDSL) {
+        const n = (currentDSL.nodes || []).find(n => n.id === nodeId);
+        if (n) n.text = newText;
+      }
+      if (currentLayout) {
+        const n = (currentLayout.nodes || []).find(n => n.id === nodeId);
+        if (n) n.text = newText;
+      }
+      if (currentAST) {
+        const n = currentAST.children.find(c => c.id === nodeId);
+        if (n) n.text = newText;
+      }
+      $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
+    }
+
+    // 渲染结果到画布 + 保存状态
+    function renderResult(layout, dsl) {
+      currentLayout = layout;
+      currentDSL = dsl;
+      const svgStr = layoutToSVG(layout, dsl, {
+        darkMode: CONFIG.style.darkMode,
+        transparent: CONFIG.style.transparent,
+        showGrid: gridVisible,
+        width: CONFIG.style.canvasWidth || null,
+        height: CONFIG.style.canvasHeight || null
+      });
+      $('canvas').innerHTML = svgStr;
+      $('dsl-output').textContent = JSON.stringify(dsl, null, 2);
+      $('export-btn').disabled = false;
+      $('export-btn').dataset.svg = svgStr;
+      // 构建 AST 供保存/导出使用
+      currentAST = buildAST(dsl, layout, { darkMode: CONFIG.style.darkMode, rankdir: CONFIG.layout.rankdir });
+      // 启用 SVG 直接编辑器（节点拖拽 / 双击编辑 / 滚轮缩放 / 拖拽平移 + 吸附/连接/边编辑）
+      const svgEl = $('canvas').querySelector('svg');
+      if (svgEl) {
+        tagNodes(svgEl, layout);
+        if (currentSVGEeditor) currentSVGEeditor.destroy();
+        currentSVGEeditor = initSVGEditor(svgEl, {
+          onNodeDrag: onNodeDrag,
+          onNodeTextEdit: onNodeTextEdit,
+          onEdgeCreate: onEdgeCreate,
+          onEdgeSelect: onEdgeSelect,
+          onEdgeAddWaypoint: onEdgeAddWaypoint,
+          onEdgeUpdateWaypoint: onEdgeUpdateWaypoint,
+          enableSnap: snapEnabled
+        });
+        // 节点点击选中（用于删除）
+        svgEl.addEventListener('mousedown', e => {
+          let el = e.target;
+          let foundId = null;
+          while (el && el !== svgEl) {
+            if (el.dataset && el.dataset.nodeId) { foundId = el.dataset.nodeId; break; }
+            el = el.parentNode;
+          }
+          selectedNodeId = foundId;
+          $('tool-delete').disabled = !foundId;
+        });
+        // 拖拽过程中实时更新关联边（node-moved 事件由 svg-editor 在 mousemove 时派发）
+        svgEl.addEventListener('node-moved', e => {
+          const { id, x, y } = e.detail;
+          // 更新 layout 节点坐标（不触发 AST 同步，mouseup 时由 onNodeDrag 完成）
+          const node = (currentLayout?.nodes || []).find(n => n.id === id);
+          if (node) {
+            node.x = x; node.y = y;
+            node.cx = x + node.width / 2;
+            node.cy = y + node.height / 2;
+          }
+          // 实时重算关联边
+          const edgeEls = svgEl.querySelectorAll('.cg-edge path');
+          (currentLayout?.edges || []).forEach((edge, idx) => {
+            if (edge.from !== id && edge.to !== id) return;
+            const newPath = recalcEdgePath(currentLayout, edge);
+            if (newPath && edgeEls[idx]) edgeEls[idx].setAttribute('d', newPath);
+          });
+          // 如果选中的边正在被拖拽的节点关联，更新拐点 handles
+          if (selectedEdgeIdx !== null) refreshWaypoints();
+        });
+      }
+      // 启用保存/导出/基线按钮
+      $('save-proj').disabled = false;
+      $('save-baseline').disabled = false;
+      $('run-regression').disabled = false;
+      refreshBaselineList();
+      // 约束得分
+      const cs = scoreConstraints(layout, dsl);
+      $('dsl-score').textContent = `约束满足度: ${(cs * 100).toFixed(0)}%`;
+    }
+
+    // 尝试渲染 Mermaid 代码，返回 { svg, error }
+    async function tryRenderMermaid(code) {
+      const mm = window.mermaid;
+      if (!mm) return { svg: null, error: 'Mermaid 未加载' };
+      mm.initialize({ startOnLoad: false, theme: CONFIG.style.darkMode ? 'dark' : 'default' });
+      try {
+        const renderId = 'cg-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+        const { svg } = await mm.render(renderId, code);
+        return { svg, error: null };
+      } catch (e) {
+        return { svg: null, error: e.message || String(e) };
+      }
+    }
+
+    // 用 AI 修复 Mermaid 语法直到可渲染（最多 maxRounds 轮）
+    // 每轮修复后弹出 diff 对话框，用户选择「应用」或「再次修复」
+    async function renderMermaidWithAIFix(originalCode) {
+      let code = originalCode;
+      let round = 0;
+      const maxRounds = 5;
+      while (round < maxRounds) {
+        round++;
+        const { svg, error } = await tryRenderMermaid(code);
+        if (svg) {
+          // 渲染成功
+          return { svg, finalCode: code, rounds: round, fixed: round > 1 };
+        }
+        // 渲染失败 → 调 AI 修复
+        $('canvas').innerHTML = `<div class="text-amber-500 text-sm"><i class="fa-solid fa-wrench mr-1"></i>Mermaid 语法错误，AI 修复中（第 ${round} 轮）...<br><span class="text-xs opacity-70">${error}</span></div>`;
+        let fixedCode;
+        try {
+          fixedCode = await fixMermaidWithAI(code, error);
+        } catch (e) {
+          return { svg: null, error: `AI 修复失败：${e.message}`, finalCode: code, rounds: round };
+        }
+        // 显示 diff 对话框（用户决定是否应用）
+        const applied = await showDiffDialog(code, fixedCode, round, error);
+        if (!applied) {
+          // 用户放弃应用，直接返回失败
+          return { svg: null, error: '用户放弃应用 AI 修复', finalCode: code, rounds: round };
+        }
+        code = fixedCode;
+      }
+      return { svg: null, error: `已尝试 ${maxRounds} 轮仍未修复`, finalCode: code, rounds: maxRounds };
+    }
+
+    // 显示 diff 对话框，返回 Promise<boolean>（true=用户点击应用）
+    function showDiffDialog(oldCode, newCode, round, errorMsg) {
+      return new Promise(resolve => {
+        const modal = $('diff-modal');
+        const body = $('diff-body');
+        const diff = lineDiff(oldCode, newCode);
+        body.innerHTML = `<div class="text-xs text-amber-600 dark:text-amber-400 mb-2"><i class="fa-solid fa-circle-info mr-1"></i>第 ${round} 轮 AI 修复 · 错误：${errorMsg}</div>` +
+          renderDiffHTML(diff);
+        $('diff-round').textContent = `第 ${round} 轮`;
+        $('diff-status').textContent = `共 ${diff.length} 行 · +${diff.filter(d => d.type === 'add').length} 新增 · -${diff.filter(d => d.type === 'del').length} 删除`;
+        modal.classList.remove('hidden');
+
+        const close = (result) => {
+          modal.classList.add('hidden');
+          $('diff-apply').onclick = null;
+          $('diff-retry').onclick = null;
+          $('diff-close').onclick = null;
+          resolve(result);
+        };
+        $('diff-apply').onclick = () => close(true);
+        // 「再次修复」= 应用此修复后继续（返回 true 让循环继续下一轮渲染）
+        $('diff-retry').onclick = () => close(true);
+        $('diff-close').onclick = () => close(false);
+      });
+    }
+
+    // 主流程：生成
+    async function generate() {
+      const promptText = $('prompt').value.trim();
+      if (!promptText) {
+        showStatus('err', '<i class="fa-solid fa-triangle-exclamation mr-1"></i>请输入图形描述');
+        return;
+      }
+      currentPrompt = promptText;
+      const btn = $('generate');
+      const useAgentLoop = $('agent-loop').checked;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>处理中...';
+      $('score-panel').classList.add('hidden');
+
+      try {
+        // 应用 UI 配置
+        CONFIG.style.theme = $('theme').value;
+        CONFIG.layout.rankdir = $('rankdir').value;
+        CONFIG.layout.applyConstraints = $('apply-constraints').checked;
+        const engine = $('engine').value;
+
+        const t0 = Date.now();
+
+        // ===== 分支 1：输入是 Mermaid 代码 → 直接渲染 + AI 修复 =====
+        if (looksLikeMermaid(promptText)) {
+          const result = await renderMermaidWithAIFix(promptText);
+          const llmMs = Date.now() - t0;
+          if (!result.svg) {
+            showStatus('err', `<i class="fa-solid fa-circle-xmark mr-1"></i>Mermaid 渲染失败：${result.error}`);
+            $('canvas').innerHTML = `<div class="text-red-400 text-sm">${result.error}</div>`;
+            // 仍把最终代码写回输入框（便于用户继续编辑）
+            if (result.finalCode && result.finalCode !== promptText) {
+              $('prompt').value = result.finalCode;
+              updateInputModeHint();
+            }
+            return;
+          }
+          // 渲染成功：把 SVG 显示到画布，并初始化 Mermaid 编辑器（支持拖拽/双击编辑）
+          $('canvas').innerHTML = result.svg;
+          $('dsl-output').textContent = `// Mermaid 源码（${result.fixed ? `经 AI 修复 ${result.rounds} 轮` : '一次渲染成功'}）\n${result.finalCode}`;
+          $('export-btn').disabled = false;
+          $('export-btn').dataset.svg = result.svg;
+          currentDSL = null; // Mermaid 模式无 DSL
+          currentMermaidCode = result.finalCode;
+          // 初始化 Mermaid SVG 编辑器（支持拖拽 / 双击编辑 / 滚轮缩放 / 拖拽平移 / 连接 / 边编辑）
+          const svgEl = $('canvas').querySelector('svg');
+          if (svgEl) {
+            if (currentSVGEeditor) currentSVGEeditor.destroy();
+            currentSVGEeditor = initMermaidEditor(svgEl, {
+              enableSnap: snapEnabled,
+              onNodeTextEdit: (nodeId, oldText, newText) => {
+                currentMermaidCode = currentMermaidCode.replace(oldText, newText);
+                $('dsl-output').textContent = `// Mermaid 源码（已编辑）\n${currentMermaidCode}`;
+                $('prompt').value = currentMermaidCode;
+                updateInputModeHint();
+                showStatus('ok', `<i class="fa-solid fa-circle-check mr-1"></i>已编辑节点文本，源码已更新`);
+              },
+              onEdgeCreate: (fromId, toId) => {
+                // Mermaid 模式：在源码末尾追加边
+                const newEdge = `    ${fromId} --> ${toId}`;
+                currentMermaidCode = currentMermaidCode.trimEnd() + '\n' + newEdge;
+                $('prompt').value = currentMermaidCode;
+                updateInputModeHint();
+                // 重新渲染
+                tryRenderMermaid(currentMermaidCode).then(r => {
+                  if (r.svg) {
+                    $('canvas').innerHTML = r.svg;
+                    const newSvg = $('canvas').querySelector('svg');
+                    if (newSvg) {
+                      if (currentSVGEeditor) currentSVGEeditor.destroy();
+                      currentSVGEeditor = initMermaidEditor(newSvg, {
+                        enableSnap: snapEnabled,
+                        onNodeTextEdit: (nodeId, oldText, newText) => {
+                          currentMermaidCode = currentMermaidCode.replace(oldText, newText);
+                          $('prompt').value = currentMermaidCode;
+                          updateInputModeHint();
+                        }
+                      });
+                    }
+                  }
+                });
+                showStatus('ok', `<i class="fa-solid fa-link mr-1"></i>已在源码追加边 ${fromId} --> ${toId}`);
+              },
+              onEdgeSelect: (edgeId) => {
+                selectedEdgeIdx = edgeId === null ? null : parseInt(edgeId);
+                $('edge-curve').disabled = edgeId === null;
+                $('edge-line').disabled = edgeId === null;
+                $('edge-delete').disabled = edgeId === null;
+              }
+            });
+          }
+          showStatus('ok', `<i class="fa-solid fa-circle-check mr-1"></i>Mermaid 渲染成功${result.fixed ? ` · AI 修复 ${result.rounds} 轮` : ''} · ${llmMs}ms`);
+          return;
+        }
+
+        // ===== 分支 2：自然语言 → DSL =====
+        btn.innerHTML = useAgentLoop
+          ? '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Agent 闭环中...'
+          : '<i class="fa-solid fa-spinner fa-spin mr-1"></i>AI 正在规划...';
+        $('canvas').innerHTML = `<div class="text-slate-400 text-sm"><i class="fa-solid fa-spinner fa-spin mr-1"></i>${useAgentLoop ? 'Designer↔Critic 多轮迭代中...' : '正在调用 LLM 生成 DSL...'}</div>`;
+
+        let norm, feedback = null, iterations = null;
+
+        if (useAgentLoop && engine === 'dagre') {
+          // Agent 闭环模式
+          const result = await designWithCritique(promptText, {
+            maxIter: 3,
+            threshold: 90,
+            onIteration: ({ round, total }) => {
+              $('canvas').innerHTML = `<div class="text-slate-400 text-sm"><i class="fa-solid fa-spinner fa-spin mr-1"></i>第 ${round} 轮迭代 · 当前评分 ${total}/100...</div>`;
+            }
+          });
+          if (!result.dsl) {
+            showStatus('err', `<i class="fa-solid fa-circle-xmark mr-1"></i>Designer 失败：${result.error}`);
+            $('canvas').innerHTML = '<div class="text-red-400 text-sm">生成失败</div>';
+            return;
+          }
+          norm = result.dsl;
+          feedback = result.feedback;
+          iterations = result.iterations;
+        } else {
+          // 单轮模式
+          const { dsl, error } = await textToDSL(promptText);
+          if (!dsl) {
+            showStatus('err', `<i class="fa-solid fa-circle-xmark mr-1"></i>DSL 解析失败：${error}`);
+            $('canvas').innerHTML = '<div class="text-red-400 text-sm">生成失败</div>';
+            return;
+          }
+          norm = normalizeDSL(dsl);
+          norm.style = CONFIG.style.theme;
+        }
+
+        const llmMs = Date.now() - t0;
+
+        // 校验
+        const v = validateDSL(norm);
+        if (!v.ok) showStatus('err', `<i class="fa-solid fa-circle-xmark mr-1"></i>DSL 校验错误：${v.errors.join('；')}`);
+        else if (v.warnings.length) showStatus('info', `<i class="fa-solid fa-triangle-exclamation mr-1"></i>${v.warnings.join('；')}`);
+
+        // 渲染
+        if (engine === 'mermaid') {
+          // DSL → Mermaid 代码 → 渲染（同样支持 AI 修复）
+          const mermaidCode = dslToMermaid(norm);
+          const result = await renderMermaidWithAIFix(mermaidCode);
+          if (!result.svg) {
+            showStatus('err', `<i class="fa-solid fa-circle-xmark mr-1"></i>Mermaid 渲染失败：${result.error}`);
+            $('canvas').innerHTML = `<div class="text-red-400 text-sm">${result.error}</div>`;
+            return;
+          }
+          $('canvas').innerHTML = result.svg;
+          $('dsl-output').textContent = JSON.stringify(norm, null, 2);
+          $('export-btn').disabled = false;
+          $('export-btn').dataset.svg = result.svg;
+          currentDSL = norm;
+          currentMermaidCode = result.finalCode;
+          // Mermaid 模式也初始化编辑器
+          const svgEl = $('canvas').querySelector('svg');
+          if (svgEl) {
+            if (currentSVGEeditor) currentSVGEeditor.destroy();
+            currentSVGEeditor = initMermaidEditor(svgEl, {
+              onNodeTextEdit: (nodeId, oldText, newText) => {
+                showStatus('info', `<i class="fa-solid fa-circle-info mr-1"></i>Mermaid 文本已编辑，重新渲染中...`);
+                // 重新渲染 mermaid
+                currentMermaidCode = currentMermaidCode.replace(oldText, newText);
+                tryRenderMermaid(currentMermaidCode).then(r => {
+                  if (r.svg) {
+                    $('canvas').innerHTML = r.svg;
+                    const newSvg = $('canvas').querySelector('svg');
+                    if (newSvg) {
+                      if (currentSVGEeditor) currentSVGEeditor.destroy();
+                      currentSVGEeditor = initMermaidEditor(newSvg, {});
+                    }
+                    $('export-btn').dataset.svg = r.svg;
+                  }
+                });
+              }
+            });
+          }
+        } else {
+          const layout = layoutWithDagre(norm);
+          renderResult(layout, norm);
+          // 单轮模式也生成 Critic 评分
+          if (!feedback) {
+            feedback = evaluate(layout, norm, 90);
+          }
+        }
+
+        // 显示评分
+        renderScorePanel(feedback, iterations);
+
+        const nodeCnt = (norm.nodes || []).length;
+        const edgeCnt = (norm.edges || []).length;
+        const cCnt = (norm.constraints || []).length;
+        const compTypes = new Set((norm.nodes || []).map(n => n.component)).size;
+        const scoreText = feedback ? ` · 评分 ${feedback.total}/100` : '';
+        const iterText = iterations ? ` · ${iterations.length} 轮迭代` : '';
+        showStatus('ok', `<i class="fa-solid fa-circle-check mr-1"></i>生成成功 · ${nodeCnt} 节点 · ${edgeCnt} 边 · ${cCnt} 约束 · ${compTypes} 类组件 · LLM ${llmMs}ms${iterText}${scoreText}`);
+      } catch (e) {
+        console.error(e);
+        showStatus('err', `<i class="fa-solid fa-circle-xmark mr-1"></i>${e.message}`);
+        $('canvas').innerHTML = `<div class="text-red-400 text-sm">${e.message}</div>`;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles mr-1"></i>生成矢量图';
+      }
+    }
+
+    $('generate').addEventListener('click', generate);
+    $('prompt').addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') generate();
+    });
+
+    // DSL 面板切换
+    $('toggle-dsl').addEventListener('click', () => {
+      $('dsl-panel').classList.toggle('hidden');
+    });
+
+    // 导出对话框（合并 JSON/SVG/PNG）
+    $('export-btn').addEventListener('click', async () => {
+      const svg = $('export-btn').dataset.svg;
+      if (!svg && !currentAST) return;
+      const choice = await select('选择导出格式', [
+        { label: 'SVG 矢量图', value: 'svg' },
+        { label: 'PNG 图片', value: 'png' },
+        { label: 'JSON 项目（含 AST）', value: 'json' },
+        { label: 'JSON DSL（仅图形描述）', value: 'dsl' }
+      ]);
+      if (!choice) return;
+
+      if (choice === 'svg') {
+        const blob = new Blob([svg], { type: 'image/svg+xml' });
+        downloadBlob(blob, 'codegraph.svg');
+        showStatus('ok', '<i class="fa-solid fa-circle-check mr-1"></i>已导出 SVG');
+      } else if (choice === 'png') {
+        // SVG → PNG
+        try {
+          const img = new Image();
+          const svg64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const vb = svg.match(/viewBox="([^"]+)"/);
+            let w = 800, h = 600;
+            if (vb) { const p = vb[1].split(/\s+/); w = parseFloat(p[2]); h = parseFloat(p[3]); }
+            canvas.width = w * 2; canvas.height = h * 2;
+            const ctx = canvas.getContext('2d');
+            if (!CONFIG.style.transparent) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(blob => { downloadBlob(blob, 'codegraph.png'); showStatus('ok', '<i class="fa-solid fa-circle-check mr-1"></i>已导出 PNG'); });
+          };
+          img.src = svg64;
+        } catch (e) { showStatus('err', `<i class="fa-solid fa-circle-xmark mr-1"></i>PNG 导出失败：${e.message}`); }
+      } else if (choice === 'json') {
+        if (currentAST) exportToFile(currentAST, 'codegraph-project');
+      } else if (choice === 'dsl') {
+        if (currentDSL) {
+          const blob = new Blob([JSON.stringify(currentDSL, null, 2)], { type: 'application/json' });
+          downloadBlob(blob, 'codegraph-dsl.json');
+        }
+      }
+    });
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // 主题切换时若有结果可重渲染（简化：仅刷新 LLM 状态显示）
+    ['theme', 'rankdir', 'engine', 'apply-constraints'].forEach(id => {
+      $(id).addEventListener('change', updateLLMMode);
+    });
+
+    // 重置画布视图（缩放和平移回归原点）
+    $('reset-view').addEventListener('click', () => {
+      if (currentSVGEeditor) {
+        currentSVGEeditor.resetView();
+        showStatus('info', '<i class="fa-solid fa-arrows-to-circle mr-1"></i>视图已重置');
+      }
+    });
+
+    // 网格显示切换（重新渲染 SVG，网格作为 SVG 内部 pattern）
+    $('grid-toggle').addEventListener('click', () => {
+      gridVisible = !gridVisible;
+      if (gridVisible) {
+        $('grid-toggle').classList.remove('opacity-50');
+      } else {
+        $('grid-toggle').classList.add('opacity-50');
+      }
+      // 重新渲染以应用/移除网格
+      if (currentDSL && currentLayout) {
+        const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
+        renderResult(currentLayout, currentDSL);
+        if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
+      }
+    });
+
+    // 智能吸附切换
+    $('snap-toggle').addEventListener('click', () => {
+      snapEnabled = !snapEnabled;
+      if (currentSVGEeditor) currentSVGEeditor.setSnap(snapEnabled);
+      if (snapEnabled) {
+        $('snap-toggle').classList.add('border-primary', 'text-primary', 'bg-indigo-50', 'dark:bg-indigo-950/40');
+        $('snap-toggle').classList.remove('opacity-50');
+      } else {
+        $('snap-toggle').classList.remove('border-primary', 'text-primary', 'bg-indigo-50', 'dark:bg-indigo-950/40');
+        $('snap-toggle').classList.add('opacity-50');
+      }
+      showStatus('info', `<i class="fa-solid fa-magnet mr-1"></i>智能吸附 ${snapEnabled ? '已开启' : '已关闭'}`);
+    });
+
+    // 节点连接模式切换
+    $('connect-toggle').addEventListener('click', () => {
+      if (!currentSVGEeditor || !currentLayout) {
+        showStatus('info', '<i class="fa-solid fa-circle-info mr-1"></i>请先生成图形');
+        return;
+      }
+      const on = !currentSVGEeditor.isConnectMode();
+      currentSVGEeditor.setConnectMode(on);
+      if (on) {
+        $('connect-toggle').classList.add('border-primary', 'text-primary', 'bg-indigo-50', 'dark:bg-indigo-950/40');
+        showStatus('info', '<i class="fa-solid fa-link mr-1"></i>连接模式：点击两个节点创建边（再次点击按钮取消）');
+      } else {
+        $('connect-toggle').classList.remove('border-primary', 'text-primary', 'bg-indigo-50', 'dark:bg-indigo-950/40');
+        showStatus('info', '<i class="fa-solid fa-link mr-1"></i>连接模式已退出');
+      }
+    });
+
+    // 边编辑：切换为曲线
+    $('edge-curve').addEventListener('click', () => {
+      if (selectedEdgeIdx === null || !currentLayout) return;
+      const edge = currentLayout.edges[selectedEdgeIdx];
+      if (!edge) return;
+      edge.style = 'curve';
+      // 移除中间拐点（曲线不需要）
+      if (edge.points && edge.points.length > 2) {
+        edge.points = [edge.points[0], edge.points[edge.points.length - 1]];
+      }
+      if (currentDSL) {
+        const dslEdge = (currentDSL.edges || [])[selectedEdgeIdx];
+        if (dslEdge) dslEdge.style = 'curve';
+      }
+      const svg = $('canvas').querySelector('svg');
+      if (svg) {
+        const edgeEls = svg.querySelectorAll('.cg-edge path');
+        if (edgeEls[selectedEdgeIdx]) {
+          const newPath = recalcEdgePath(currentLayout, edge);
+          if (newPath) edgeEls[selectedEdgeIdx].setAttribute('d', newPath);
+        }
+      }
+      refreshWaypoints();
+      $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
+      showStatus('ok', '<i class="fa-solid fa-bezier-curve mr-1"></i>已切换为曲线');
+    });
+
+    // 边编辑：切换为直线
+    $('edge-line').addEventListener('click', () => {
+      if (selectedEdgeIdx === null || !currentLayout) return;
+      const edge = currentLayout.edges[selectedEdgeIdx];
+      if (!edge) return;
+      edge.style = 'line';
+      if (currentDSL) {
+        const dslEdge = (currentDSL.edges || [])[selectedEdgeIdx];
+        if (dslEdge) dslEdge.style = 'line';
+      }
+      const svg = $('canvas').querySelector('svg');
+      if (svg) {
+        const edgeEls = svg.querySelectorAll('.cg-edge path');
+        if (edgeEls[selectedEdgeIdx]) {
+          const newPath = recalcEdgePath(currentLayout, edge);
+          if (newPath) edgeEls[selectedEdgeIdx].setAttribute('d', newPath);
+        }
+      }
+      refreshWaypoints();
+      $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
+      showStatus('ok', '<i class="fa-solid fa-minus mr-1"></i>已切换为直线');
+    });
+
+    // 边编辑：删除选中的边
+    $('edge-delete').addEventListener('click', () => {
+      if (selectedEdgeIdx === null || !currentLayout) return;
+      const idx = selectedEdgeIdx;
+      // 从 SVG 移除
+      const svg = $('canvas').querySelector('svg');
+      if (svg) {
+        const edgeEls = svg.querySelectorAll('.cg-edge');
+        if (edgeEls[idx]) edgeEls[idx].remove();
+      }
+      // 从 layout 移除
+      currentLayout.edges.splice(idx, 1);
+      // 从 DSL 移除
+      if (currentDSL) {
+        currentDSL.edges.splice(idx, 1);
+      }
+      // 从 AST 移除
+      if (currentAST) {
+        const astEdges = currentAST.children.filter(c => c.type === 'edge');
+        if (astEdges[idx]) {
+          const astIdx = currentAST.children.indexOf(astEdges[idx]);
+          currentAST.children.splice(astIdx, 1);
+        }
+      }
+      selectedEdgeIdx = null;
+      $('edge-curve').disabled = true;
+      $('edge-line').disabled = true;
+      $('edge-delete').disabled = true;
+      if (currentSVGEeditor) {
+        currentSVGEeditor.clearWaypoints();
+        currentSVGEeditor.tagEdges();
+      }
+      $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
+      showStatus('ok', '<i class="fa-solid fa-trash mr-1"></i>已删除边');
+    });
+
+    // 删除选中节点（直接操作 SVG + DSL + layout + AST）
+    $('tool-delete').addEventListener('click', () => {
+      if (!selectedNodeId) return;
+      const id = selectedNodeId;
+      // 从 SVG 移除
+      const svg = $('canvas').querySelector('svg');
+      if (svg) {
+        const nodeEl = svg.querySelector(`[data-node-id="${id}"]`);
+        if (nodeEl) nodeEl.remove();
+        // 移除关联的边
+        const edgeEls = svg.querySelectorAll('.cg-edge');
+        const removedEdgeIdxs = [];
+        (currentLayout?.edges || []).forEach((edge, idx) => {
+          if (edge.from === id || edge.to === id) removedEdgeIdxs.push(idx);
+        });
+        // 倒序删除 DOM
+        removedEdgeIdxs.reverse().forEach(idx => edgeEls[idx]?.remove());
+      }
+      // 从 layout 移除节点 + 关联边
+      if (currentLayout) {
+        currentLayout.nodes = (currentLayout.nodes || []).filter(n => n.id !== id);
+        currentLayout.edges = (currentLayout.edges || []).filter(e => e.from !== id && e.to !== id);
+      }
+      // 从 DSL 移除节点 + 关联边
+      if (currentDSL) {
+        currentDSL.nodes = (currentDSL.nodes || []).filter(n => n.id !== id);
+        currentDSL.edges = (currentDSL.edges || []).filter(e => e.from !== id && e.to !== id);
+      }
+      // 从 AST 移除
+      if (currentAST) {
+        currentAST.children = currentAST.children.filter(c => c.id !== id);
+      }
+      selectedNodeId = null;
+      $('tool-delete').disabled = true;
+      $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
+      showStatus('ok', `<i class="fa-solid fa-trash mr-1"></i>已删除节点 ${id}`);
+    });
+
+    // 组件库面板的"添加节点"按钮（点击选择组件并添加到画布中心）
+    $('tool-add-node-2').addEventListener('click', async () => {
+      const byCat = listComponentsByCategory();
+      const catLabels = { basic: '基础形状', it: 'IT 类', chemistry: '化学类', annotation: '标注', other: '其他' };
+      const items = [];
+      Object.keys(byCat).forEach(cat => {
+        byCat[cat].forEach(c => items.push({ label: `[${catLabels[cat] || cat}] ${c.label}`, value: c.name }));
+      });
+      const component = await select('选择组件类型', items);
+      if (!component) return;
+      const text = await prompt('节点文本：', '新节点');
+      if (text === null || !text.trim()) return;
+      // 添加到画布中心（视图原点附近）
+      const id = 'N' + Date.now().toString(36).slice(-4);
+      const size = getDefaultSize(component);
+      const x = -size.width / 2;
+      const y = -size.height / 2;
+      if (!currentDSL) {
+        currentDSL = normalizeDSL({ version: '1.0', layout: 'flow', style: CONFIG.style.theme, nodes: [], edges: [], groups: [], constraints: [] });
+      }
+      currentDSL.nodes = currentDSL.nodes || [];
+      currentDSL.nodes.push({ id, text: text.trim(), component });
+      if (!currentLayout) {
+        currentLayout = { nodes: [], edges: [], width: 0, height: 0 };
+      }
+      currentLayout.nodes.push({ id, x, y, width: size.width, height: size.height, text: text.trim(), component });
+      renderResult(currentLayout, currentDSL);
+      showStatus('ok', `<i class="fa-solid fa-circle-check mr-1"></i>已添加 ${component} 节点 ${id}`);
+    });
+
+    // 保存项目
+    $('save-proj').addEventListener('click', async () => {
+      if (!currentAST) return;
+      const name = await prompt('项目名称：', currentPrompt.slice(0, 20) || '未命名');
+      if (name === null || !name.trim()) return;
+      if (saveProject(name.trim(), currentAST, currentPrompt)) {
+        showStatus('ok', `<i class="fa-solid fa-circle-check mr-1"></i>项目「${name}」已保存`);
+      } else {
+        showStatus('err', '<i class="fa-solid fa-circle-xmark mr-1"></i>保存失败（localStorage 不可用）');
+      }
+    });
+
+    // 加载项目
+    $('load-proj').addEventListener('click', async () => {
+      const projects = listProjects();
+      if (!projects.length) {
+        showStatus('info', '<i class="fa-solid fa-triangle-exclamation mr-1"></i>暂无已保存项目');
+        return;
+      }
+      const items = projects.map(p => ({ label: p.name, value: p.name }));
+      const selectedName = await select('选择项目', items);
+      if (!selectedName) return;
+      const loaded = loadProject(selectedName);
+      if (!loaded) {
+        showStatus('err', '<i class="fa-solid fa-circle-xmark mr-1"></i>加载失败');
+        return;
+      }
+      currentAST = loaded.ast;
+      currentPrompt = loaded.prompt || '';
+      $('prompt').value = currentPrompt;
+      const dsl = astToDSL(currentAST);
+      CONFIG.style.theme = dsl.style || 'Nature';
+      CONFIG.style.darkMode = currentAST.darkMode;
+      applyDarkMode(CONFIG.style.darkMode);
+      $('theme').value = CONFIG.style.theme;
+      // 用 AST 中的坐标直接渲染（不重新布局）
+      const layout = {
+        nodes: currentAST.children.filter(c => c.type === 'node').map(n => ({ ...n })),
+        edges: currentAST.children.filter(c => c.type === 'edge').map(e => ({ ...e })),
+        width: currentAST.width, height: currentAST.height
+      };
+      renderResult(layout, dsl);
+      const fb = evaluate(layout, dsl, 90);
+      renderScorePanel(fb, null);
+      showStatus('ok', `<i class="fa-solid fa-circle-check mr-1"></i>已加载项目「${loaded.name}」`);
+    });
+
+    // 隐藏的文件导入 input
+    const importInput = document.createElement('input');
+    importInput.type = 'file';
+    importInput.accept = '.json';
+    importInput.style.display = 'none';
+    document.body.appendChild(importInput);
+    importInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const ast = await importFromFile(file);
+        currentAST = ast;
+        const dsl = astToDSL(ast);
+        const layout = {
+          nodes: ast.children.filter(c => c.type === 'node').map(n => ({ ...n })),
+          edges: ast.children.filter(c => c.type === 'edge').map(e => ({ ...e })),
+          width: ast.width, height: ast.height
+        };
+        renderResult(layout, dsl);
+        showStatus('ok', '<i class="fa-solid fa-circle-check mr-1"></i>已导入项目文件');
+      } catch (err) {
+        showStatus('err', `<i class="fa-solid fa-circle-xmark mr-1"></i>${err.message}`);
+      }
+    });
+
+    // 主题快捷控制 + 实时刷新预览
+    async function refreshPreview() {
+      if (currentDSL && currentLayout) {
+        // dagre 模式：更新 DSL 主题，重新渲染 SVG
+        currentDSL.style = CONFIG.style.theme;
+        $('theme').value = CONFIG.style.theme;
+        $('theme-quick').value = CONFIG.style.theme;
+        $('transparent-quick').innerHTML = CONFIG.style.transparent
+          ? '<i class="fa-solid fa-square-check text-primary"></i>'
+          : '<i class="fa-solid fa-square"></i>';
+        // 保留当前 viewBox（用户可能缩放/平移过）
+        const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
+        renderResult(currentLayout, currentDSL);
+        if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
+      } else if (currentMermaidCode) {
+        // Mermaid 模式：重新渲染 Mermaid（应用主题）
+        $('theme').value = CONFIG.style.theme;
+        $('theme-quick').value = CONFIG.style.theme;
+        $('transparent-quick').innerHTML = CONFIG.style.transparent
+          ? '<i class="fa-solid fa-square-check text-primary"></i>'
+          : '<i class="fa-solid fa-square"></i>';
+        const r = await tryRenderMermaid(currentMermaidCode);
+        if (r.svg) {
+          $('canvas').innerHTML = r.svg;
+          const newSvg = $('canvas').querySelector('svg');
+          if (newSvg) {
+            if (currentSVGEeditor) currentSVGEeditor.destroy();
+            currentSVGEeditor = initMermaidEditor(newSvg, {
+              enableSnap: snapEnabled,
+              onNodeTextEdit: (nodeId, oldText, newText) => {
+                currentMermaidCode = currentMermaidCode.replace(oldText, newText);
+                $('prompt').value = currentMermaidCode;
+                updateInputModeHint();
+                $('dsl-output').textContent = `// Mermaid 源码（已编辑）\n${currentMermaidCode}`;
+                showStatus('ok', '<i class="fa-solid fa-circle-check mr-1"></i>节点文本已更新');
+              }
+            });
+            $('export-btn').dataset.svg = r.svg;
+          }
+        }
+      }
+    }
+
+    $('theme-quick').addEventListener('change', () => {
+      CONFIG.style.theme = $('theme-quick').value;
+      refreshPreview();
+    });
+    $('theme').addEventListener('change', () => {
+      CONFIG.style.theme = $('theme').value;
+      $('theme-quick').value = CONFIG.style.theme;
+      refreshPreview();
+    });
+    $('dark-quick').addEventListener('click', () => {
+      const dark = setDarkMode(!CONFIG.style.darkMode);
+      applyDarkMode(dark);
+      $('dark-quick').innerHTML = dark ? '<i class="fa-solid fa-moon"></i>' : '<i class="fa-solid fa-sun"></i>';
+      refreshPreview();
+    });
+    $('transparent-quick').addEventListener('click', () => {
+      CONFIG.style.transparent = !CONFIG.style.transparent;
+      refreshPreview();
+    });
+
+    // 拖拽添加节点：从组件库拖到画布
+    let draggedComponent = null;
+    document.addEventListener('dragstart', e => {
+      const comp = e.target.closest('.comp-preview');
+      if (comp && comp.dataset.component) {
+        draggedComponent = comp.dataset.component;
+        e.dataTransfer.effectAllowed = 'copy';
+      }
+    });
+    document.addEventListener('dragend', () => { draggedComponent = null; });
+
+    const canvasEl = $('canvas');
+    canvasEl.addEventListener('dragover', e => {
+      if (draggedComponent) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    });
+    canvasEl.addEventListener('drop', e => {
+      if (!draggedComponent) return;
+      e.preventDefault();
+      // 计算放置坐标（转换到 SVG 逻辑坐标系，基于当前 viewBox）
+      const svgEl = canvasEl.querySelector('svg');
+      let x = 0, y = 0;
+      const rect = canvasEl.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      if (svgEl && currentSVGEeditor) {
+        const tf = currentSVGEeditor.getTransform();
+        const vb = tf.viewBox;
+        x = vb.x + (px / rect.width) * vb.w;
+        y = vb.y + (py / rect.height) * vb.h;
+      } else if (svgEl) {
+        try {
+          const pt = svgEl.createSVGPoint();
+          pt.x = e.clientX; pt.y = e.clientY;
+          const ctm = svgEl.getScreenCTM().inverse();
+          const svgPt = pt.matrixTransform(ctm);
+          x = svgPt.x; y = svgPt.y;
+        } catch (err) { x = px - 50; y = py - 25; }
+      } else {
+        x = px - 50; y = py - 25;
+      }
+
+      // ===== Mermaid 模式：在源码追加节点 =====
+      if (currentMermaidCode && !currentDSL) {
+        const nodeId = 'N' + Date.now().toString(36).slice(-4);
+        const nodeLabel = `新节点${nodeId}`;
+        // 根据组件类型选择 Mermaid 形状语法
+        const shapeMap = {
+          rect: `[${nodeLabel}]`, rounded: `(${nodeLabel})`, circle: `((${nodeLabel}))`,
+          diamond: `{${nodeLabel}}`, hexagon: `{{${nodeLabel}}}`, cylinder: `[( ${nodeLabel} )]`,
+          beaker: `[${nodeLabel}]`, flask: `[${nodeLabel}]`, molecule: `[${nodeLabel}]`,
+          parallelogram: `[/${nodeLabel}/]`, ellipse: `([${nodeLabel}])`
+        };
+        const shape = shapeMap[draggedComponent] || `[${nodeLabel}]`;
+        const newLine = `    ${nodeId}${shape}`;
+        currentMermaidCode = currentMermaidCode.trimEnd() + '\n' + newLine;
+        $('prompt').value = currentMermaidCode;
+        updateInputModeHint();
+        // 重新渲染 Mermaid
+        tryRenderMermaid(currentMermaidCode).then(r => {
+          if (r.svg) {
+            $('canvas').innerHTML = r.svg;
+            const newSvg = $('canvas').querySelector('svg');
+            if (newSvg) {
+              if (currentSVGEeditor) currentSVGEeditor.destroy();
+              currentSVGEeditor = initMermaidEditor(newSvg, {
+                enableSnap: snapEnabled,
+                onNodeTextEdit: (nid, oldText, newText) => {
+                  currentMermaidCode = currentMermaidCode.replace(oldText, newText);
+                  $('prompt').value = currentMermaidCode;
+                  updateInputModeHint();
+                  $('dsl-output').textContent = `// Mermaid 源码（已编辑）\n${currentMermaidCode}`;
+                }
+              });
+              $('export-btn').dataset.svg = r.svg;
+            }
+          }
+        });
+        showStatus('ok', `<i class="fa-solid fa-circle-check mr-1"></i>已拖拽添加 ${draggedComponent} 节点到 Mermaid 源码`);
+        draggedComponent = null;
+        return;
+      }
+
+      // ===== dagre 模式：添加节点到 DSL/layout =====
+      if (!currentDSL) {
+        currentDSL = normalizeDSL({ version: '1.0', layout: 'flow', style: CONFIG.style.theme, nodes: [], edges: [], groups: [], constraints: [] });
+      }
+      const id = 'N' + Date.now().toString(36).slice(-4);
+      const size = getDefaultSize(draggedComponent);
+      currentDSL.nodes = currentDSL.nodes || [];
+      currentDSL.nodes.push({ id, text: '新节点', component: draggedComponent });
+      if (!currentLayout) {
+        currentLayout = { nodes: [], edges: [], width: 0, height: 0 };
+      }
+      currentLayout.nodes.push({
+        id, x: x - size.width / 2, y: y - size.height / 2,
+        width: size.width, height: size.height,
+        text: '新节点', component: draggedComponent
+      });
+      // 保留 viewBox
+      const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
+      renderResult(currentLayout, currentDSL);
+      if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
+      showStatus('ok', `<i class="fa-solid fa-circle-check mr-1"></i>已拖拽添加 ${draggedComponent} 节点（双击可编辑文本）`);
+      draggedComponent = null;
+    });
+
+    // 视觉回归测试
+    function refreshBaselineList() {
+      const list = listBaselines();
+      const el = $('baseline-list');
+      // 更新工作区徽章
+      $('ws-badge').textContent = `工作区：${getCurrentWorkspaceName()}`;
+      if (!list.length) {
+        el.innerHTML = '<i class="fa-solid fa-circle-info mr-1"></i>当前工作区暂无基线，生成图形后点击「保存基线」';
+        return;
+      }
+      el.innerHTML = `<i class="fa-solid fa-list mr-1"></i>已保存 ${list.length} 个基线（工作区：${getCurrentWorkspaceName()}）：` +
+        list.map(b => `<span class="inline-block px-2 py-0.5 mr-1 mb-1 rounded bg-slate-100 dark:bg-slate-800">${b.name}</span>`).join('');
+    }
+    refreshBaselineList();
+
+    $('save-baseline').addEventListener('click', async () => {
+      if (!currentDSL) return;
+      const svg = $('export-btn').dataset.svg;
+      if (!svg) return;
+      const name = await prompt('基线名称：', currentPrompt.slice(0, 20) || '基线');
+      if (name === null || !name.trim()) return;
+      try {
+        await saveBaseline(name.trim(), svg, { nodeCount: currentDSL.nodes.length, theme: currentDSL.style });
+        refreshBaselineList();
+        showStatus('ok', `<i class="fa-solid fa-circle-check mr-1"></i>基线「${name}」已保存`);
+      } catch (e) {
+        showStatus('err', `<i class="fa-solid fa-circle-xmark mr-1"></i>保存基线失败：${e.message}`);
+      }
+    });
+
+    $('run-regression').addEventListener('click', async () => {
+      if (!currentDSL) return;
+      const svg = $('export-btn').dataset.svg;
+      if (!svg) return;
+      const baselines = listBaselines();
+      if (!baselines.length) {
+        showStatus('info', '<i class="fa-solid fa-triangle-exclamation mr-1"></i>暂无基线可对比');
+        return;
+      }
+      const items = baselines.map(b => ({ label: b.name, value: b.name }));
+      const selectedName = await select('选择基线进行对比', items);
+      if (!selectedName) return;
+
+      $('regression-result').classList.remove('hidden');
+      $('regression-result').innerHTML = '<div class="text-xs text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-1"></i>对比中...</div>';
+      try {
+        const r = await compareWithBaseline(selectedName, svg, 1);
+        if (r.error) {
+          $('regression-result').innerHTML = `<div class="text-xs text-red-500"><i class="fa-solid fa-circle-xmark mr-1"></i>${r.error}</div>`;
+          return;
+        }
+        const passColor = r.passed ? 'text-green-500' : 'text-red-500';
+        const passText = r.passed ? '通过' : '不通过';
+        $('regression-result').innerHTML = `
+          <div class="text-xs space-y-2">
+            <div class="${passColor} font-semibold"><i class="fa-solid fa-${r.passed ? 'circle-check' : 'circle-xmark'} mr-1"></i>${passText} · 差异 ${r.mismatchPercentage}%（阈值 ${r.threshold}%）</div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <div class="text-slate-500 mb-1">基线</div>
+                <img src="${(baselines.find(b => b.name === selectedName)).png}" class="w-full border border-slate-200 dark:border-slate-700 rounded" alt="baseline"/>
+              </div>
+              <div>
+                <div class="text-slate-500 mb-1">差异图</div>
+                <img src="${r.diffImage}" class="w-full border border-slate-200 dark:border-slate-700 rounded" alt="diff"/>
+              </div>
+            </div>
+          </div>`;
+        showStatus('ok', `<i class="fa-solid fa-circle-check mr-1"></i>回归测试完成 · 差异 ${r.mismatchPercentage}% · ${passText}`);
+      } catch (e) {
+        $('regression-result').innerHTML = `<div class="text-xs text-red-500"><i class="fa-solid fa-circle-xmark mr-1"></i>${e.message}</div>`;
+        showStatus('err', `<i class="fa-solid fa-circle-xmark mr-1"></i>${e.message}`);
+      }
+    });
+  </script>
 </body>
 </html>
