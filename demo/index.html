@@ -1181,7 +1181,7 @@
           const dsl = mermaidToDSL(promptText);
           if (!dsl.nodes || dsl.nodes.length === 0) {
             showStatus('err', `<i class="fa-solid fa-circle-xmark mr-1"></i>Mermaid 代码解析失败：未识别到节点`);
-            $('canvas').innerHTML = `<div class="text-red-400 text-sm">Mermaid 代码解析失败：未识别到节点</div>`;
+            $('canvas').innerHTML = `<div class="absolute inset-0 flex flex-col items-center justify-center text-red-400 text-sm"><i class="fa-solid fa-circle-xmark text-3xl mb-3"></i><span>Mermaid 代码解析失败：未识别到节点</span></div>`;
             return;
           }
           // 标准化 DSL
@@ -1193,6 +1193,10 @@
           currentMermaidCode = promptText; // 保留原始 Mermaid 源码（供回写）
           renderResult(layout, currentDSL);
           $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
+          // Mermaid 分支也显示评分和 DSL 面板
+          const fb = evaluate(layout, currentDSL, 90);
+          renderScorePanel(fb, null);
+          $('dsl-panel').classList.remove('hidden');
           showStatus('ok', `<i class="fa-solid fa-circle-check mr-1"></i>Mermaid → DSL 转换成功 · ${dsl.nodes.length} 节点 · ${dsl.edges.length} 边 · ${llmMs}ms`);
           return;
         }
