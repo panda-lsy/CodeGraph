@@ -3,7 +3,18 @@
 // 对齐第二版 §图形组件库 - 接入 components.js
 // 增强：透明背景 / 可调画布 / 边端点裁剪到节点边界
 
-import { renderComponent } from './components.js';
+import { renderComponent, setErrorCollector } from './components.js';
+
+// 模块级错误收集器
+let _renderErrors = [];
+
+// 配置错误收集器（components.js 的 textEl 会调用）
+setErrorCollector(e => _renderErrors.push(e));
+
+// 获取最近一次渲染的错误
+export function getRenderErrors() {
+  return _renderErrors.slice();
+}
 
 // 主题 Token（CSS-like）
 // 每个主题含 light / dark 双套
@@ -58,6 +69,11 @@ function getTheme(dsl, darkMode) {
   return darkMode ? t.dark : t.light;
 }
 
+// 暴露主题计算（供外部获取当前主题，用于单节点重渲染）
+export function getThemeForDSL(dsl, darkMode) {
+  return getTheme(dsl, darkMode);
+}
+
 // 计算线段与矩形边界的交点（用于裁剪边端点到节点边界）
 // 矩形以 (x, y, w, h) 表示，p 为外部点，返回矩形边界上离 p 最近的点
 function rectBorderPoint(node, fromX, fromY) {
@@ -75,6 +91,53 @@ function rectBorderPoint(node, fromX, fromY) {
   return { x: cx + dx * scale, y: cy + dy * scale };
 }
 
+// 计算线段与菱形边界的交点（菱形：以矩形内切菱形计算）
+// 菱形顶点：(cx, y_top), (x_right, cy), (cx, y_bottom), (x_left, cy)
+function diamondBorderPoint(node, fromX, fromY) {
+  const cx = node.x + node.width / 2;
+  const cy = node.y + node.height / 2;
+  const dx = fromX - cx;
+  const dy = fromY - cy;
+  if (dx === 0 && dy === 0) return { x: cx, y: cy };
+  const hw = node.width / 2;
+  const hh = node.height / 2;
+  // 菱形方程：|x/hw| + |y/hh| = 1，求射线 (dx*t, dy*t) 与菱形边交点
+  const t = 1 / (Math.abs(dx) / hw + Math.abs(dy) / hh);
+  return { x: cx + dx * t, y: cy + dy * t };
+}
+
+// 计算线段与圆形/椭圆边界的交点
+function ellipseBorderPoint(node, fromX, fromY) {
+  const cx = node.x + node.width / 2;
+  const cy = node.y + node.height / 2;
+  const dx = fromX - cx;
+  const dy = fromY - cy;
+  if (dx === 0 && dy === 0) return { x: cx, y: cy };
+  const hw = node.width / 2;
+  const hh = node.height / 2;
+  // 椭圆方程：(x/hw)^2 + (y/hh)^2 = 1
+  const t = 1 / Math.sqrt((dx * dx) / (hw * hw) + (dy * dy) / (hh * hh));
+  return { x: cx + dx * t, y: cy + dy * t };
+}
+
+// 根据节点 component 类型选择合适的边界点计算函数
+function borderPoint(node, fromX, fromY) {
+  if (!node) return { x: fromX, y: fromY };
+  const comp = node.component || 'rect';
+  switch (comp) {
+    case 'diamond':
+      return diamondBorderPoint(node, fromX, fromY);
+    case 'circle':
+    case 'ellipse':
+      return ellipseBorderPoint(node, fromX, fromY);
+    case 'hexagon':
+      // 六边形近似为椭圆（略小）
+      return ellipseBorderPoint(node, fromX, fromY);
+    default:
+      return rectBorderPoint(node, fromX, fromY);
+  }
+}
+
 // 边 → SVG path（折线/曲线）+ 端点裁剪到节点边界
 // edge.style: 'line' (默认折线) | 'curve' (贝塞尔曲线)
 function renderEdge(edge, theme, nodeMap) {
@@ -89,12 +152,12 @@ function renderEdge(edge, theme, nodeMap) {
   // 起点：裁剪到 from 节点边界（朝向第二个点）
   if (fromNode) {
     const next = pts[1] || end;
-    start = rectBorderPoint(fromNode, next.x, next.y);
+    start = borderPoint(fromNode, next.x, next.y);
   }
   // 终点：裁剪到 to 节点边界（朝向倒数第二个点）
   if (toNode) {
     const prev = pts[pts.length - 2] || start;
-    end = rectBorderPoint(toNode, prev.x, prev.y);
+    end = borderPoint(toNode, prev.x, prev.y);
   }
 
   const mid = pts.slice(1, -1);
@@ -190,25 +253,16 @@ export function layoutToSVG(layout, dsl, options = {}) {
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
   const groupsSVG = renderGroups(layout, dsl, theme);
   const edgesSVG = edges.map(e => renderEdge(e, theme, nodeMap)).join('');
+  // 渲染节点前清空错误收集器
+  _renderErrors = [];
   const nodesSVG = nodes.map(n => renderComponent(n, theme)).join('');
 
-  // 背景：默认透明；非透明时画一个覆盖 viewBox 的背景
-  const bgRect = options.transparent === false
-    ? `<rect x="${vbMinX}" y="${vbMinY}" width="${vbW}" height="${vbH}" fill="${theme.bg}"/>`
-    : '';
+  // 背景：强制透明（不画背景 rect，由画布容器决定背景色）
+  const bgRect = '';
+  const gridRect = '';
+  const gridDef = '';
 
-  // 网格 pattern（showGrid=true 时在背景之上、内容之下画网格）
-  const gridColor = options.darkMode ? '#334155' : '#cbd5e1';
-  const gridRect = options.showGrid
-    ? `<rect x="${vbMinX}" y="${vbMinY}" width="${vbW}" height="${vbH}" fill="url(#cg-grid)"/>`
-    : '';
-  const gridDef = options.showGrid
-    ? `<pattern id="cg-grid" width="20" height="20" patternUnits="userSpaceOnUse">
-        <circle cx="10" cy="10" r="1" fill="${gridColor}" opacity="0.5"/>
-      </pattern>`
-    : '';
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="${vbMinX.toFixed(1)} ${vbMinY.toFixed(1)} ${vbW.toFixed(1)} ${vbH.toFixed(1)}" preserveAspectRatio="xMidYMid meet" style="background:${options.transparent === false && !options.showGrid ? theme.bg : 'transparent'}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="${vbMinX.toFixed(1)} ${vbMinY.toFixed(1)} ${vbW.toFixed(1)} ${vbH.toFixed(1)}" preserveAspectRatio="xMidYMid meet" style="background:transparent">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="${theme.edgeColor}"/>
@@ -263,8 +317,22 @@ export function recalcEdgePath(layout, edge) {
   const fromNode = (layout.nodes || []).find(n => n.id === edge.from);
   const toNode = (layout.nodes || []).find(n => n.id === edge.to);
   if (!fromNode || !toNode) return null;
-  const start = rectBorderPoint(fromNode, toNode.x + toNode.width / 2, toNode.y + toNode.height / 2);
-  const end = rectBorderPoint(toNode, fromNode.x + fromNode.width / 2, fromNode.y + fromNode.height / 2);
+  const fromCx = fromNode.x + fromNode.width / 2;
+  const fromCy = fromNode.y + fromNode.height / 2;
+  const toCx = toNode.x + toNode.width / 2;
+  const toCy = toNode.y + toNode.height / 2;
+  // 节点旋转时，borderPoint 在未旋转本地坐标系下计算，需要做坐标变换：
+  //   1. 把对方中心反向旋转到本节点未旋转坐标系
+  //   2. 计算 borderPoint
+  //   3. 把边界点正向旋转回世界坐标系
+  const fromRot = fromNode.rotation || 0;
+  const toRot = toNode.rotation || 0;
+  const startTarget = fromRot ? rotatePoint(toCx, toCy, fromCx, fromCy, -fromRot) : { x: toCx, y: toCy };
+  const endTarget = toRot ? rotatePoint(fromCx, fromCy, toCx, toCy, -toRot) : { x: fromCx, y: fromCy };
+  let start = borderPoint(fromNode, startTarget.x, startTarget.y);
+  let end = borderPoint(toNode, endTarget.x, endTarget.y);
+  if (fromRot) start = rotatePoint(start.x, start.y, fromCx, fromCy, fromRot);
+  if (toRot) end = rotatePoint(end.x, end.y, toCx, toCy, toRot);
   const style = edge.style || 'curve';
   if (style === 'curve') {
     const dx = end.x - start.x;
@@ -279,4 +347,12 @@ export function recalcEdgePath(layout, edge) {
     return `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${end.x.toFixed(1)} ${end.y.toFixed(1)}`;
   }
   return `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} L ${end.x.toFixed(1)} ${end.y.toFixed(1)}`;
+}
+
+// 将点绕中心旋转指定角度（度）
+function rotatePoint(px, py, cx, cy, deg) {
+  const rad = deg * Math.PI / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  const dx = px - cx, dy = py - cy;
+  return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
 }

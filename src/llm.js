@@ -155,31 +155,3 @@ export function looksLikeMermaid(text) {
   const keywords = ['graph ', 'flowchart ', 'flowchart\t', 'sequence', 'class ', 'state ', 'er ', 'gantt ', 'pie ', 'journey ', 'mindmap', 'timeline', 'gitgraph'];
   return keywords.some(k => firstLine.startsWith(k) || t.toLowerCase().startsWith(k));
 }
-
-// AI 修复 Mermaid 语法（输入错误代码 + 错误信息，返回修复后的 mermaid 代码）
-export async function fixMermaidWithAI(mermaidCode, errorMessage) {
-  const system = `你是 Mermaid 语法修复专家。用户提供的 Mermaid 代码渲染失败，请修复语法错误并返回可正常渲染的版本。
-常见错误：
-- 节点 id 含非法字符（空格、特殊符号）
-- 节点文本含特殊字符未转义（如括号、引号）
-- 边语法错误（如 --> 写成 ->）
-- subgraph 未正确闭合
-- 节点 shape 语法错误
-
-输出规则：仅输出修复后的 Mermaid 代码，不要 \`\`\`mermaid 代码块包裹，不要任何解释。`;
-  const user = `原代码：
-${mermaidCode}
-
-错误信息：
-${errorMessage}
-
-请修复语法并返回可正常渲染的 Mermaid 代码。`;
-
-  const { content } = await chat([
-    { role: 'system', content: system },
-    { role: 'user', content: user }
-  ]);
-  // 去掉可能的代码块包裹
-  const cleaned = content.replace(/^[\s\S]*?```mermaid\s*/m, '').replace(/^[\s\S]*?```\s*/m, '').replace(/```[\s]*$/m, '').trim();
-  return cleaned || content.trim();
-}

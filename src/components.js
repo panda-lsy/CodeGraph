@@ -13,6 +13,8 @@
 //   化学类：beaker(烧杯) / flask(锥形瓶) / testtube(试管) / condenser(冷凝管) / funnel(漏斗) / molecule(分子)
 //   标注：note(便签)
 
+import { renderNodeText, hasRichText } from './text-render.js';
+
 function esc(s) {
   return String(s || '').replace(/[<>&"']/g, c => ({
     '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;'
@@ -23,9 +25,36 @@ function esc(s) {
 const REGISTRY = new Map();
 const META = new Map(); // name → { label, category, description }
 
+// 错误收集回调（由 render.js 注入）
+let _errorCollector = null;
+export function setErrorCollector(fn) { _errorCollector = fn; }
+
+// 文本渲染：检测 Markdown/TeX → foreignObject + HTML；纯文本 → SVG <text>
 function textEl(w, h, text, t, dy = 0, fs = null) {
+  const fontFamily = t.fontFamily || 'inherit';
+  const fontSize = fs || t.fontSize;
+  const fontSizeStr = typeof fontSize === 'number' ? fontSize + 'px' : fontSize;
+  const color = t.textColor || 'inherit';
+  const bold = t.bold || false;
+  const italic = t.italic || false;
+
+  // 包含 Markdown/TeX 语法时使用 foreignObject 渲染富文本
+  if (hasRichText(text)) {
+    const { html, errors } = renderNodeText(text, { fontFamily, fontSize: fontSizeStr, color, bold, italic });
+    // 收集错误到全局收集器
+    if (errors.length > 0 && _errorCollector) {
+      errors.forEach(e => _errorCollector(e));
+    }
+    return `<foreignObject x="0" y="0" width="${w}" height="${h}" data-raw-text="${encodeURIComponent(text)}">
+      <div xmlns="http://www.w3.org/1999/xhtml" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;box-sizing:border-box;padding:3px;transform:translateY(${dy}px);">
+        ${html}
+      </div>
+    </foreignObject>`;
+  }
+
+  // 纯文本：使用 SVG <text>（性能更好）
   return `<text x="${w / 2}" y="${h / 2 + dy}" text-anchor="middle" dominant-baseline="central"
-          font-family="${t.fontFamily}" font-size="${fs || t.fontSize}" fill="${t.textColor}">${esc(text)}</text>`;
+          font-family="${fontFamily}" font-size="${fontSize}" fill="${color}"${bold ? ' font-weight="bold"' : ''}${italic ? ' font-style="italic"' : ''}>${esc(text)}</text>`;
 }
 
 // 注册一个组件
@@ -247,9 +276,26 @@ Object.keys(BUILTIN).forEach(name => {
 // 渲染节点组件
 export function renderComponent(node, theme) {
   const shape = REGISTRY.get(node.component) || REGISTRY.get('rect');
-  const inner = shape(node.width, node.height, node.text, theme);
+  // 合并节点的文字样式覆盖（node.textStyle → theme）
+  const t = { ...theme };
+  if (node.textStyle) {
+    if (node.textStyle.fontFamily) t.fontFamily = node.textStyle.fontFamily;
+    if (node.textStyle.fontSize) {
+      t.fontSize = typeof node.textStyle.fontSize === 'string'
+        ? parseInt(node.textStyle.fontSize) : node.textStyle.fontSize;
+    }
+    if (node.textStyle.color) t.textColor = node.textStyle.color;
+    if (node.textStyle.bold) t.bold = true;
+    if (node.textStyle.italic) t.italic = true;
+  }
+  const inner = shape(node.width, node.height, node.text, t);
+  // 支持节点旋转
+  const rotation = node.rotation || 0;
+  const transform = rotation !== 0
+    ? `translate(${node.x},${node.y}) rotate(${rotation},${node.width / 2},${node.height / 2})`
+    : `translate(${node.x},${node.y})`;
   return `
-  <g class="cg-node" transform="translate(${node.x},${node.y})">
+  <g class="cg-node" transform="${transform}"${rotation !== 0 ? ` data-rotation="${rotation}"` : ''}>
     ${inner}
   </g>`;
 }
@@ -298,4 +344,53 @@ export function getDefaultSize(component) {
     note: { width: 100, height: 70 }
   };
   return sizes[component] || { width: 100, height: 50 };
+}
+
+// 根据文本内容和字体大小计算所需节点尺寸
+// text: 节点文本，textStyle: {fontSize, fontFamily, bold, italic}，component: 组件类型
+// 返回 {width, height} 建议尺寸（不小于默认尺寸）
+export function autoFitNodeSize(text, textStyle, component) {
+  const defaultSize = getDefaultSize(component);
+  if (!text) return defaultSize;
+
+  // 解析字体大小（px）
+  let fontSize = 14;
+  if (textStyle?.fontSize) {
+    fontSize = typeof textStyle.fontSize === 'string'
+      ? parseInt(textStyle.fontSize) : textStyle.fontSize;
+  }
+  // 粗体略宽
+  const boldMul = textStyle?.bold ? 1.05 : 1;
+  // 估算字符宽度（中文字符约 1em，英文字符约 0.6em）
+  const chars = Array.from(text);
+  let textWidth = 0;
+  chars.forEach(ch => {
+    if (/[\u4e00-\u9fa5\uff00-\uffef]/.test(ch)) textWidth += fontSize * 1.0;
+    else if (/[A-Z]/.test(ch)) textWidth += fontSize * 0.65;
+    else if (/[a-z0-9]/.test(ch)) textWidth += fontSize * 0.55;
+    else textWidth += fontSize * 0.4;
+  });
+  textWidth *= boldMul;
+  // 估算行数（按 80px 宽度折行，但至少 1 行）
+  const lines = Math.max(1, Math.ceil(textWidth / 200));
+  const lineHeight = fontSize * 1.3;
+  const textHeight = lines * lineHeight;
+
+  // 内边距 + 形状补偿
+  const padding = 16;
+  // 形状宽度补偿系数（菱形/六边形需要更宽）
+  const shapeMul = {
+    diamond: 1.4, hexagon: 1.25, parallelogram: 1.2, trapezoid: 1.15,
+    circle: 1.2, ellipse: 1.2, cloud: 1.3, cylinder: 1.1,
+    triangle: 1.3, document: 1.1, note: 1.1
+  }[component] || 1.0;
+
+  const neededWidth = Math.ceil((textWidth / lines + padding * 2) * shapeMul);
+  const neededHeight = Math.ceil(textHeight + padding * 2);
+
+  // 不小于默认尺寸
+  return {
+    width: Math.max(defaultSize.width, neededWidth),
+    height: Math.max(defaultSize.height, neededHeight)
+  };
 }

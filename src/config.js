@@ -4,13 +4,21 @@
 
 export const CONFIG = {
   llm: {
-    baseURL: 'http://api.codegraph.shengxia.me/v1',
+    baseURL: 'https://api.codegraph.shengxia.me/v1',
     model: 'Doubao-Seed-2.0-mini', // 非 reasoning 模型，响应快；qwen3.5-plus 为 reasoning 模型，DSL 生成易超时
     apiKey: '', // 备用 API 无需 key；如需切换需鉴权的端点，localStorage 注入 cg_api_key
     useMock: false,
     temperature: 0.2,
     timeoutMs: 45000
   },
+  // 可选模型列表（运行时通过 /v1/models 动态获取并覆盖）
+  models: [
+    'Doubao-Seed-2.0-mini',
+    'Doubao-Seed-2.0-lite',
+    'Doubao-Seed-2.0-pro',
+    'qwen3.5-plus',
+    'Volc-DeepSeek-V3.2'
+  ],
   layout: {
     engine: 'dagre', // 'dagre' | 'mermaid'
     rankdir: 'TB', // TB | LR | BT | RL
@@ -69,4 +77,31 @@ export function setCanvasSize(width, height) {
   CONFIG.style.canvasWidth = width;
   CONFIG.style.canvasHeight = height;
   return CONFIG.style;
+}
+
+// 动态获取可用模型列表（OpenAI 兼容 /v1/models）
+// 失败时回退到 CONFIG.models 默认列表
+export async function fetchModels() {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const headers = {};
+    if (CONFIG.llm.apiKey) headers['Authorization'] = `Bearer ${CONFIG.llm.apiKey}`;
+    const resp = await fetch(`${CONFIG.llm.baseURL}/models`, {
+      method: 'GET',
+      headers,
+      signal: ctrl.signal
+    });
+    clearTimeout(timer);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const list = (data?.data || []).map(m => m.id).filter(Boolean);
+    if (list.length > 0) {
+      CONFIG.models = list;
+    }
+    return CONFIG.models;
+  } catch (e) {
+    console.warn('[CodeGraph] 获取模型列表失败，使用默认列表:', e.message);
+    return CONFIG.models;
+  }
 }

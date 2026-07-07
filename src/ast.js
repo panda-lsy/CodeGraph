@@ -46,7 +46,8 @@ export function buildAST(dsl, layout, options = {}) {
       width: n.width,
       height: n.height,
       text: n.text,
-      component: n.component || 'rect'
+      component: n.component || 'rect',
+      textStyle: n.textStyle || null
     };
     ast.children.push(nodeObj);
     nodeMap.set(n.id, nodeObj);
@@ -85,11 +86,13 @@ export function astToDSL(ast) {
 
   (ast.children || []).forEach(child => {
     if (child.type === AST_TYPES.NODE) {
-      nodes.push({
+      const node = {
         id: child.id,
         text: child.text,
         component: child.component || 'rect'
-      });
+      };
+      if (child.textStyle) node.textStyle = child.textStyle;
+      nodes.push(node);
     } else if (child.type === AST_TYPES.EDGE) {
       edges.push({
         from: child.from,

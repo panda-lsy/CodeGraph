@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -390,69 +390,26 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="text-center mb-12 scroll-reveal">
                 <h2 class="text-4xl md:text-5xl font-bold mb-4">交互式<span class="gradient-text">演示</span></h2>
-                <p class="text-gray-400 text-lg">选择下方示例，体验AI生成矢量流程图的过程</p>
+                <p class="text-gray-400 text-lg">直接体验 CodeGraph 编辑器，自然语言 / Mermaid 代码生成矢量图</p>
             </div>
-            
-            <div class="glass-card rounded-2xl p-6 md:p-8 scroll-reveal">
-                <!-- Demo Controls -->
-                <div class="flex flex-wrap gap-3 mb-8">
-                    <button onclick="loadDemo('ml')" class="demo-btn px-4 py-2 rounded-lg bg-primary/20 border border-primary/40 text-primary hover:bg-primary/30 transition-all text-sm font-medium active">
-                        <i class="fas fa-brain mr-1.5"></i>机器学习流程
-                    </button>
-                    <button onclick="loadDemo('software')" class="demo-btn px-4 py-2 rounded-lg bg-dark-light border border-white/10 text-gray-300 hover:border-primary/40 hover:text-primary transition-all text-sm font-medium">
-                        <i class="fas fa-laptop-code mr-1.5"></i>软件架构
-                    </button>
-                    <button onclick="loadDemo('chemistry')" class="demo-btn px-4 py-2 rounded-lg bg-dark-light border border-white/10 text-gray-300 hover:border-primary/40 hover:text-primary transition-all text-sm font-medium">
-                        <i class="fas fa-flask mr-1.5"></i>化学实验
-                    </button>
-                    <button onclick="loadDemo('business')" class="demo-btn px-4 py-2 rounded-lg bg-dark-light border border-white/10 text-gray-300 hover:border-primary/40 hover:text-primary transition-all text-sm font-medium">
-                        <i class="fas fa-chart-line mr-1.5"></i>业务流程
-                    </button>
+
+            <div class="glass-card rounded-2xl p-3 md:p-4 scroll-reveal overflow-hidden">
+                <!-- 直接嵌入 Demo 编辑器，全屏交互 -->
+                <div class="rounded-xl overflow-hidden border border-white/10" style="height: 80vh; min-height: 560px;">
+                    <iframe src="demo/index.html" class="w-full h-full" style="border:0;background:#f8fafc;" title="CodeGraph Demo 编辑器"></iframe>
                 </div>
-                
-                <!-- Demo Content -->
-                <div class="grid md:grid-cols-2 gap-8">
-                    <div>
-                        <div class="mb-4">
-                            <label class="text-sm text-gray-400 mb-2 block">用户输入</label>
-                            <div id="demo-input" class="demo-input rounded-xl p-4 text-gray-200 min-h-[80px]">
-                                绘制一个机器学习模型训练流程图
-                            </div>
-                        </div>
-                        
-                        <div class="mb-4">
-                            <label class="text-sm text-gray-400 mb-2 block">AI生成过程</label>
-                            <div id="demo-process" class="code-block p-4 text-xs text-gray-400 h-32 overflow-y-auto">
-                                <div class="typing-text"></div>
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <label class="text-sm text-gray-400 mb-2 block">输出格式</label>
-                            <div class="flex gap-2">
-                                <span class="tag bg-green-500/20 text-green-400 border border-green-500/30">
-                                    <i class="fas fa-check mr-1"></i>SVG矢量
-                                </span>
-                                <span class="tag bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                                    <i class="fas fa-check mr-1"></i>可编辑
-                                </span>
-                                <span class="tag bg-purple-500/20 text-purple-400 border border-purple-500/30">
-                                    <i class="fas fa-check mr-1"></i>无限缩放
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="flex items-center justify-center bg-dark-light/30 rounded-xl p-6 min-h-[300px]">
-                        <div id="mermaid-diagram" class="mermaid w-full">
-graph LR
-    A[数据预处理] --> B[特征工程]
-    B --> C[模型训练]
-    C --> D[模型验证]
-    D -->|通过| E[部署上线]
-    D -->|未通过| C
-                        </div>
-                    </div>
+                <div class="flex flex-wrap items-center justify-center gap-3 mt-4 text-xs text-gray-400">
+                    <span><i class="fas fa-hand-pointer mr-1"></i>拖拽节点</span>
+                    <span class="opacity-40">·</span>
+                    <span><i class="fas fa-mouse-pointer mr-1"></i>双击编辑</span>
+                    <span class="opacity-40">·</span>
+                    <span><i class="fas fa-magnifying-glass mr-1"></i>滚轮缩放</span>
+                    <span class="opacity-40">·</span>
+                    <span><i class="fas fa-shapes mr-1"></i>组件库拖入</span>
+                    <span class="opacity-40">·</span>
+                    <span><i class="fas fa-link mr-1"></i>连接模式</span>
+                    <span class="opacity-40">·</span>
+                    <a href="demo/index.html" target="_blank" class="text-primary hover:underline"><i class="fas fa-up-right-from-square mr-1"></i>在新标签页打开</a>
                 </div>
             </div>
         </div>

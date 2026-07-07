@@ -51,6 +51,7 @@ export function layoutWithDagre(dsl) {
 
   const nodes = g.nodes().map(id => {
     const node = g.node(id);
+    const dslNode = dsl.nodes.find(n => n.id === id);
     return {
       id,
       x: node.x - node.width / 2,
@@ -60,7 +61,8 @@ export function layoutWithDagre(dsl) {
       cx: node.x,
       cy: node.y,
       text: node.label,
-      component: dsl.nodes.find(n => n.id === id)?.component || 'rect'
+      component: dslNode?.component || 'rect',
+      textStyle: dslNode?.textStyle
     };
   });
 
@@ -128,5 +130,165 @@ export function dslToMermaid(dsl) {
   });
 
   return lines.join('\n');
+}
+
+// Mermaid flowchart 代码 → DSL
+// 支持：节点形状语法、边语法（--> -.-> ==> 等）、subgraph、注释 %%、方向 TB/LR
+// 形状语法映射（Mermaid → component）：
+//   ["text"] → rect, ("text") → rounded, (("text")) → circle,
+//   {"text"} → diamond, {{"text"}} → hexagon, [("text")] → cylinder,
+//   [/text\] → parallelogram, [\text/] → trapezoid, ((text)) → circle
+export function mermaidToDSL(code) {
+  if (!code || typeof code !== 'string') return { nodes: [], edges: [], groups: [] };
+  const lines = code.split(/\n/);
+  const dsl = { nodes: [], edges: [], groups: [] };
+  const nodeMap = new Map(); // id → node（去重）
+  let currentSubgraph = null;
+
+  // 确保 node 存在（按 id），可选设置 text/component
+  function ensureNode(id, text, component) {
+    if (!nodeMap.has(id)) {
+      const node = { id, text: text || id, component: component || 'rect' };
+      nodeMap.set(id, node);
+      dsl.nodes.push(node);
+    } else if (text || component) {
+      const n = nodeMap.get(id);
+      if (text) n.text = text;
+      if (component) n.component = component;
+    }
+  }
+
+  // 解析节点定义语法：id[shape "text"] 或 id(shape "text") 等
+  // 返回 {id, text, component} 或 null
+  function parseNodeDef(token) {
+    if (!token) return null;
+    // 圆柱 [( "text" )]
+    let m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\[\(\s*"((?:[^"\\]|\\.)*)"\s*\)\]$/);
+    if (m) return { id: m[1], text: m[2], component: 'cylinder' };
+    // 双圆 (( "text" ))
+    m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\(\(\s*"((?:[^"\\]|\\.)*)"\s*\)\)$/);
+    if (m) return { id: m[1], text: m[2], component: 'circle' };
+    // 六边形 {{ "text" }}
+    m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\{\{\s*"((?:[^"\\]|\\.)*)"\s*\}\}$/);
+    if (m) return { id: m[1], text: m[2], component: 'hexagon' };
+    // 菱形 { "text" }
+    m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\{\s*"((?:[^"\\]|\\.)*)"\s*\}$/);
+    if (m) return { id: m[1], text: m[2], component: 'diamond' };
+    // 圆角 ( "text" )
+    m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\(\s*"((?:[^"\\]|\\.)*)"\s*\)$/);
+    if (m) return { id: m[1], text: m[2], component: 'rounded' };
+    // 矩形 [ "text" ]
+    m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\[\s*"((?:[^"\\]|\\.)*)"\s*\]$/);
+    if (m) return { id: m[1], text: m[2], component: 'rect' };
+    // 平行四边形 [/ "text" \]
+    m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\[\/\s*"((?:[^"\\]|\\.)*)"\s*\\\]$/);
+    if (m) return { id: m[1], text: m[2], component: 'parallelogram' };
+    // 梯形 [\ "text" /]
+    m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\[\\\s*"((?:[^"\\]|\\.)*)"\s*\/\]$/);
+    if (m) return { id: m[1], text: m[2], component: 'trapezoid' };
+    // 无引号版本
+    m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\[\(\s*([^\)]+)\s*\)\]$/);
+    if (m) return { id: m[1], text: m[2], component: 'cylinder' };
+    m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\(\(\s*([^\)]+)\s*\)\)$/);
+    if (m) return { id: m[1], text: m[2], component: 'circle' };
+    m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\{\{\s*([^\}]+)\s*\}\}$/);
+    if (m) return { id: m[1], text: m[2], component: 'hexagon' };
+    m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\{\s*([^\}]+)\s*\}$/);
+    if (m) return { id: m[1], text: m[2], component: 'diamond' };
+    m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\(\s*([^\)]+)\s*\)$/);
+    if (m) return { id: m[1], text: m[2], component: 'rounded' };
+    m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\[\s*([^\]]+)\s*\]$/);
+    if (m) return { id: m[1], text: m[2], component: 'rect' };
+    // 纯 id（无形状）
+    m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)$/);
+    if (m) return { id: m[1], text: m[1], component: 'rect' };
+    return null;
+  }
+
+  // 解析单行
+  function parseLine(line) {
+    // 去注释
+    const commentIdx = line.indexOf('%%');
+    if (commentIdx >= 0) line = line.slice(0, commentIdx);
+    line = line.trim();
+    if (!line) return;
+
+    // 首行声明：graph/flowchart TB/LR
+    const declMatch = line.match(/^(?:graph|flowchart)\s+(TB|LR|BT|RL|td)$/i);
+    if (declMatch) {
+      const dir = declMatch[1].toUpperCase();
+      if (dir === 'LR' || dir === 'RL') CONFIG.layout.rankdir = 'LR';
+      else CONFIG.layout.rankdir = 'TB';
+      return;
+    }
+
+    // subgraph 开始
+    const sgMatch = line.match(/^subgraph\s+(\S+)(?:\s*\["?([^"\]]*)"?\])?/);
+    if (sgMatch) {
+      currentSubgraph = { id: sgMatch[1], label: sgMatch[2] || sgMatch[1], members: [] };
+      dsl.groups.push(currentSubgraph);
+      return;
+    }
+
+    // subgraph 结束
+    if (/^end$/i.test(line)) { currentSubgraph = null; return; }
+
+    // 检测是否含边箭头（支持 Mermaid 多种箭头语法 + 边标签）
+    // 边标签预处理：A -->|text| B → A --> B (label)
+    //               A -. text .-> B → A -.-> B (label)
+    //               A -- text --> B → A --> B (label)
+    let pendingLabels = [];
+    let work = line
+      .replace(/-->\|([^|]*)\|/g, (m, l) => { pendingLabels.push(l); return '-->'; })
+      .replace(/==>\|([^|]*)\|/g, (m, l) => { pendingLabels.push(l); return '==>'; })
+      .replace(/-\.\s+([^-.]+?)\s+\.->/g, (m, l) => { pendingLabels.push(l); return '-.->'; })
+      .replace(/--\s+([^-]+?)\s+-->/g, (m, l) => { pendingLabels.push(l); return '-->'; })
+      .replace(/<-->\|([^|]*)\|/g, (m, l) => { pendingLabels.push(l); return '<-->'; });
+
+    // 箭头种类：双向 <-->、粗实线 ==>、虚线 -.->、实线 -->、无箭头 ---、圆点 o--o、叉 x--x、双线 ===
+    const arrowRe = /<-->|==>|-->|<-\.->|-\.->|---|o--o|x--x|===|==/;
+    if (arrowRe.test(work)) {
+      // 用箭头分割，处理链式：A --> B --> C
+      const parts = work.split(/\s*(<-->|==>|-->|<-\.->|-\.->|---|o--o|x--x|===|==)\s*/);
+      if (parts.length >= 3) {
+        let prevNode = null;
+        let labelIdx = 0;
+        for (let i = 0; i < parts.length; i += 2) {
+          const token = parts[i]?.trim();
+          // 箭头位于当前节点之前（连接 prevNode 与当前 node）
+          const arrow = i > 0 ? parts[i - 1]?.trim() : null;
+          if (!token) continue;
+          const node = parseNodeDef(token);
+          if (node) {
+            ensureNode(node.id, node.text, node.component);
+            if (prevNode && arrow) {
+              // 虚线/圆点/叉/双线 → curve；其余 → line
+              const style = /-\.->|o--o|x--x|===|==/.test(arrow) ? 'curve' : 'line';
+              const label = pendingLabels[labelIdx++] || '';
+              dsl.edges.push({ from: prevNode.id, to: node.id, label, style });
+              if (currentSubgraph) {
+                if (!currentSubgraph.members.includes(prevNode.id)) currentSubgraph.members.push(prevNode.id);
+                if (!currentSubgraph.members.includes(node.id)) currentSubgraph.members.push(node.id);
+              }
+            }
+            prevNode = node;
+          }
+        }
+        return;
+      }
+    }
+
+    // 节点定义
+    const node = parseNodeDef(line);
+    if (node) {
+      ensureNode(node.id, node.text, node.component);
+      if (currentSubgraph && !currentSubgraph.members.includes(node.id)) {
+        currentSubgraph.members.push(node.id);
+      }
+    }
+  }
+
+  lines.forEach(parseLine);
+  return dsl;
 }
 
