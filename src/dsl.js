@@ -21,7 +21,7 @@ export const DSL_VERSION = '1.0';
 // 支持的约束类型
 export const CONSTRAINT_TYPES = ['align', 'equalSpace', 'symmetric', 'order'];
 // 支持的节点组件类型
-export const NODE_COMPONENTS = ['rect', 'rounded', 'circle', 'diamond', 'hexagon', 'cylinder', 'beaker', 'flask', 'molecule', 'arrow'];
+export const NODE_COMPONENTS = ['rect', 'rounded', 'circle', 'diamond', 'hexagon', 'cylinder', 'beaker', 'flask', 'molecule', 'arrow', 'image', 'parallelogram', 'trapezoid', 'triangle', 'cloud', 'server', 'document', 'testtube', 'condenser', 'funnel', 'note'];
 
 // 创建空 DSL 文档
 export function createEmptyDSL() {

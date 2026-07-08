@@ -242,6 +242,21 @@ const BUILTIN = {
           fill="${t.fill}" stroke="${t.stroke}" stroke-width="${t.strokeWidth}"/>
     <path d="M ${w - fold} 0 L ${w - fold} ${fold} L ${w} ${fold}" fill="none" stroke="${t.stroke}" stroke-width="0.8"/>
     ${textEl(w - fold, h, text, t)}`;
+  },
+
+  // 图片组件：node.imageSrc 存储 data URL 或远程 URL
+  image: (w, h, text, t, node) => {
+    const src = (node && node.imageSrc) || '';
+    const preserveAspectRatio = (node && node.imageFit) || 'xMidYMid meet';
+    if (!src) {
+      // 占位符：无图片时显示虚线框
+      return `<rect x="0" y="0" width="${w}" height="${h}" rx="4"
+            fill="none" stroke="${t.stroke}" stroke-width="${t.strokeWidth}" stroke-dasharray="4 3"/>
+      <text x="${w / 2}" y="${h / 2}" text-anchor="middle" dominant-baseline="central"
+            font-family="${t.fontFamily || 'inherit'}" font-size="${Math.min(t.fontSize, 12)}" fill="${t.textColor || '#94a3b8'}">无图片</text>`;
+    }
+    return `<image href="${src}" x="0" y="0" width="${w}" height="${h}"
+            preserveAspectRatio="${preserveAspectRatio}"/>`;
   }
 };
 
@@ -265,7 +280,8 @@ const BUILTIN_META = {
   condenser: { label: '冷凝管', category: 'chemistry' },
   funnel: { label: '漏斗', category: 'chemistry' },
   molecule: { label: '分子结构', category: 'chemistry' },
-  note: { label: '便签', category: 'annotation' }
+  note: { label: '便签', category: 'annotation' },
+  image: { label: '图片', category: 'annotation' }
 };
 
 // 注册所有内置组件
@@ -288,14 +304,15 @@ export function renderComponent(node, theme) {
     if (node.textStyle.bold) t.bold = true;
     if (node.textStyle.italic) t.italic = true;
   }
-  const inner = shape(node.width, node.height, node.text, t);
+  const inner = shape(node.width, node.height, node.text, t, node);
   // 支持节点旋转
   const rotation = node.rotation || 0;
   const transform = rotation !== 0
     ? `translate(${node.x},${node.y}) rotate(${rotation},${node.width / 2},${node.height / 2})`
     : `translate(${node.x},${node.y})`;
+  const hiddenStyle = node.hidden ? ' style="display:none"' : '';
   return `
-  <g class="cg-node" transform="${transform}"${rotation !== 0 ? ` data-rotation="${rotation}"` : ''}>
+  <g class="cg-node" transform="${transform}"${rotation !== 0 ? ` data-rotation="${rotation}"` : ''}${hiddenStyle}>
     ${inner}
   </g>`;
 }
@@ -341,7 +358,8 @@ export function getDefaultSize(component) {
     server: { width: 80, height: 100 },
     document: { width: 100, height: 80 },
     triangle: { width: 90, height: 80 },
-    note: { width: 100, height: 70 }
+    note: { width: 100, height: 70 },
+    image: { width: 120, height: 90 }
   };
   return sizes[component] || { width: 100, height: 50 };
 }

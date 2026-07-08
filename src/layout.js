@@ -6,7 +6,12 @@ import { CONFIG } from './config.js';
 import { applyConstraints } from './constraint.js';
 
 // 估算节点尺寸（根据文本长度与组件类型）
-function estimateNodeSize(text, component) {
+function estimateNodeSize(text, component, node) {
+  // 图片组件：使用节点自带尺寸或默认 120×90
+  if (component === 'image') {
+    if (node && node.width && node.height) return { width: node.width, height: node.height };
+    return { width: 120, height: 90 };
+  }
   const len = (text || '').length;
   // 圆形/菱形/分子需要更紧凑的方形
   const isSquare = ['circle', 'diamond', 'molecule', 'hexagon'].includes(component);
@@ -40,7 +45,7 @@ export function layoutWithDagre(dsl) {
   g.setDefaultEdgeLabel(() => ({}));
 
   (dsl.nodes || []).forEach(n => {
-    const { width, height } = estimateNodeSize(n.text || n.label, n.component);
+    const { width, height } = estimateNodeSize(n.text || n.label, n.component, n);
     g.setNode(n.id, { width, height, label: n.text || n.label });
   });
   (dsl.edges || []).forEach(e => {
@@ -62,7 +67,11 @@ export function layoutWithDagre(dsl) {
       cy: node.y,
       text: node.label,
       component: dslNode?.component || 'rect',
-      textStyle: dslNode?.textStyle
+      textStyle: dslNode?.textStyle,
+      rotation: dslNode?.rotation || 0,
+      hidden: dslNode?.hidden || false,
+      imageSrc: dslNode?.imageSrc || null,
+      imageFit: dslNode?.imageFit || 'xMidYMid meet'
     };
   });
 

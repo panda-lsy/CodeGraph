@@ -49,6 +49,9 @@ export function buildAST(dsl, layout, options = {}) {
       component: n.component || 'rect',
       textStyle: n.textStyle || null
     };
+    if (n.rotation) nodeObj.rotation = n.rotation;
+    if (n.hidden) nodeObj.hidden = true;
+    if (n.imageSrc) { nodeObj.imageSrc = n.imageSrc; nodeObj.imageFit = n.imageFit || 'xMidYMid meet'; }
     ast.children.push(nodeObj);
     nodeMap.set(n.id, nodeObj);
   });
@@ -92,6 +95,9 @@ export function astToDSL(ast) {
         component: child.component || 'rect'
       };
       if (child.textStyle) node.textStyle = child.textStyle;
+      if (child.rotation) node.rotation = child.rotation;
+      if (child.hidden) node.hidden = true;
+      if (child.imageSrc) { node.imageSrc = child.imageSrc; node.imageFit = child.imageFit || 'xMidYMid meet'; }
       nodes.push(node);
     } else if (child.type === AST_TYPES.EDGE) {
       edges.push({

@@ -84,6 +84,16 @@
     .dark .cg-scroll::-webkit-scrollbar-thumb:hover { background: #64748b; background-clip: content-box; }
     .cg-scroll { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
     .dark .cg-scroll { scrollbar-color: #475569 transparent; }
+    /* 图层列表小按钮 */
+    #layer-list .tb-btn {
+      width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+      border: 1px solid transparent; border-radius: 3px; cursor: pointer; font-size: 10px;
+      color: #64748b; background: transparent; transition: 0.15s; flex-shrink: 0; padding: 0;
+    }
+    #layer-list .tb-btn:hover:not(:disabled) { background: #e0e7ff; color: #6366f1; }
+    #layer-list .tb-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .dark #layer-list .tb-btn { color: #94a3b8; }
+    .dark #layer-list .tb-btn:hover:not(:disabled) { background: #334155; color: #818cf8; }
     /* select 下拉框夜间模式适配 */
     select { -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center; padding-right: 24px !important; }
     .dark select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); }
@@ -148,7 +158,7 @@
     #render-errors .err-close:hover { opacity: 1; }
   </style>
 </head>
-<body class="bg-slate-50 dark:bg-slate-950 min-h-screen text-slate-800 dark:text-slate-200 transition-colors">
+<body class="bg-slate-50 dark:bg-slate-950 h-screen overflow-hidden text-slate-800 dark:text-slate-200 transition-colors flex flex-col">
   <!-- 顶栏 -->
   <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
     <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -180,11 +190,11 @@
     </div>
   </header>
 
-  <main class="max-w-[1800px] mx-auto px-4 py-4 flex gap-4" style="height: calc(100vh - 73px);">
+  <main class="max-w-[1800px] mx-auto px-4 py-4 flex gap-4 flex-1 min-h-0">
     <!-- 左侧：导航栏式控制面板 -->
     <aside class="w-80 flex-shrink-0 flex flex-col gap-3 overflow-y-auto pr-1 cg-scroll">
       <!-- 导航分组：生成图形 -->
-      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex-shrink-0">
         <div class="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
           <i class="fa-solid fa-wand-magic-sparkles text-primary text-xs"></i>
           <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">生成图形</h3>
@@ -250,7 +260,7 @@
       </div>
 
       <!-- 导航分组：编辑图形 -->
-      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex-shrink-0">
         <div class="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
           <i class="fa-solid fa-pen-to-square text-primary text-xs"></i>
           <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">编辑图形</h3>
@@ -263,6 +273,22 @@
             </summary>
             <div class="p-2 bg-slate-50 dark:bg-slate-900/50">
               <div id="comp-grid" class="space-y-2"></div>
+            </div>
+          </details>
+          <!-- 插入图片 -->
+          <input type="file" id="image-input" accept="image/*" class="hidden">
+          <button id="insert-image-btn" class="w-full py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center justify-center gap-1.5">
+            <i class="fa-solid fa-image text-primary"></i>插入图片
+          </button>
+          <!-- 图层管理 -->
+          <details class="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+            <summary class="text-xs font-medium text-slate-600 dark:text-slate-400 px-3 py-1.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1 select-none">
+              <i class="fa-solid fa-layer-group"></i>图层管理<span id="layer-count" class="opacity-50 font-normal"></span>
+            </summary>
+            <div class="p-2 bg-slate-50 dark:bg-slate-900/50 max-h-72 overflow-y-auto cg-scroll">
+              <div id="layer-list" class="space-y-1">
+                <div class="text-xs text-slate-400 text-center py-4">暂无图层，生成或添加节点后显示</div>
+              </div>
             </div>
           </details>
           <!-- LLM 接入 -->
@@ -290,7 +316,7 @@
       </div>
 
       <!-- 导航分组：测试与基线 -->
-      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex-shrink-0">
         <div class="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
           <i class="fa-solid fa-vial text-primary text-xs"></i>
           <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">视觉回归测试</h3>
@@ -311,7 +337,7 @@
       </div>
 
       <!-- 导航分组：DSL 预览 -->
-      <div id="dsl-panel" class="hidden bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+      <div id="dsl-panel" class="hidden bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex-shrink-0">
         <div class="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Graphic DSL</h3>
           <span id="dsl-score" class="text-xs text-slate-500"></span>
@@ -320,7 +346,7 @@
       </div>
 
       <!-- 评分面板（Agent 闭环时显示） -->
-      <div id="score-panel" class="hidden bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+      <div id="score-panel" class="hidden bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex-shrink-0">
         <div class="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Critic 评审</h3>
           <span id="score-total" class="text-base font-bold"></span>
@@ -1149,6 +1175,8 @@
       // 约束得分
       const cs = scoreConstraints(layout, dsl);
       $('dsl-score').textContent = `约束满足度: ${(cs * 100).toFixed(0)}%`;
+      // 刷新图层列表
+      refreshLayerList();
     }
 
     // 主流程：生成
@@ -1690,6 +1718,14 @@
         x = px - 50; y = py - 25;
       }
 
+      // 图片组件特殊处理：拖入时触发文件选择
+      if (draggedComponent === 'image') {
+        pendingImagePos = { x, y };
+        draggedComponent = null;
+        $('image-input').click();
+        return;
+      }
+
       // ===== 统一走 dagre：添加节点到 DSL/layout =====
       if (!currentDSL) {
         // 如果有 Mermaid 源码但无 DSL，先转换
@@ -1721,6 +1757,181 @@
       showStatus('ok', `<i class="fa-solid fa-circle-check mr-1"></i>已拖拽添加 ${draggedComponent} 节点（双击可编辑文本）`);
       draggedComponent = null;
     });
+
+    // ===== 插入图片功能 =====
+    let pendingImagePos = null; // 拖拽图片组件时的放置坐标
+    $('insert-image-btn').addEventListener('click', () => $('image-input').click());
+    $('image-input').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (file.size > 4 * 1024 * 1024) {
+        showStatus('err', '<i class="fa-solid fa-triangle-exclamation mr-1"></i>图片不能超过 4MB');
+        e.target.value = '';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const dataUrl = ev.target.result;
+        const img = new Image();
+        img.onload = () => {
+          // 按原始宽高比缩放到合理尺寸（最大 200px）
+          const maxDim = 200;
+          let w = img.naturalWidth, h = img.naturalHeight;
+          if (w > maxDim || h > maxDim) {
+            const ratio = Math.min(maxDim / w, maxDim / h);
+            w = Math.round(w * ratio);
+            h = Math.round(h * ratio);
+          }
+          // 确保有 DSL/layout
+          if (!currentDSL) {
+            currentDSL = normalizeDSL({ version: '1.0', layout: 'flow', style: CONFIG.style.theme, nodes: [], edges: [], groups: [], constraints: [] });
+            currentLayout = { nodes: [], edges: [], width: 0, height: 0 };
+          }
+          // 放置位置：拖拽落点 或 viewBox 中心
+          let cx = 200, cy = 150;
+          if (pendingImagePos) {
+            cx = pendingImagePos.x;
+            cy = pendingImagePos.y;
+          } else if (currentSVGEeditor) {
+            const vb = currentSVGEeditor.getTransform().viewBox;
+            cx = vb.x + vb.w / 2;
+            cy = vb.y + vb.h / 2;
+          }
+          pendingImagePos = null;
+          const id = 'IMG' + Date.now().toString(36).slice(-4);
+          currentDSL.nodes = currentDSL.nodes || [];
+          currentDSL.nodes.push({ id, text: '', component: 'image', imageSrc: dataUrl });
+          if (!currentLayout) currentLayout = { nodes: [], edges: [], width: 0, height: 0 };
+          currentLayout.nodes.push({ id, x: cx - w / 2, y: cy - h / 2, width: w, height: h, text: '', component: 'image', imageSrc: dataUrl });
+          const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
+          renderResult(currentLayout, currentDSL);
+          if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
+          showStatus('ok', `<i class="fa-solid fa-circle-check mr-1"></i>已插入图片（可拖拽、缩放、旋转）`);
+        };
+        img.onerror = () => showStatus('err', '<i class="fa-solid fa-circle-xmark mr-1"></i>图片加载失败');
+        img.src = dataUrl;
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+    });
+
+    // ===== 图层管理功能 =====
+    function refreshLayerList() {
+      const list = $('layer-list');
+      const countEl = $('layer-count');
+      const nodes = (currentDSL && currentDSL.nodes) || [];
+      countEl.textContent = nodes.length ? `（${nodes.length}）` : '';
+      if (!nodes.length) {
+        list.innerHTML = '<div class="text-xs text-slate-400 text-center py-4">暂无图层，生成或添加节点后显示</div>';
+        return;
+      }
+      // 倒序显示（顶层在前）
+      list.innerHTML = nodes.slice().reverse().map((n, revIdx) => {
+        const idx = nodes.length - 1 - revIdx;
+        const label = n.text || (n.imageSrc ? '图片' : '') || getComponentLabel(n.component) || n.id;
+        const compLabel = getComponentLabel(n.component) || n.component;
+        const isHidden = n.hidden === true;
+        const compIcon = n.component === 'image' ? 'fa-image' : 'fa-square';
+        return `<div class="flex items-center gap-1.5 px-2 py-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-primary transition ${selectedNodeId === n.id ? 'ring-1 ring-primary' : ''}" data-layer-id="${n.id}">
+          <button class="layer-vis tb-btn" data-idx="${idx}" title="${isHidden ? '显示' : '隐藏'}"><i class="fa-solid ${isHidden ? 'fa-eye-slash' : 'fa-eye'} ${isHidden ? 'text-slate-400' : 'text-primary'}"></i></button>
+          <i class="fa-solid ${compIcon} text-slate-400 text-[10px] flex-shrink-0"></i>
+          <span class="flex-1 text-xs truncate cursor-pointer layer-select" data-idx="${idx}" title="${compLabel}: ${label}">${label}</span>
+          <button class="layer-up tb-btn" data-idx="${idx}" title="上移一层" ${idx >= nodes.length - 1 ? 'disabled' : ''}><i class="fa-solid fa-chevron-up text-[10px]"></i></button>
+          <button class="layer-down tb-btn" data-idx="${idx}" title="下移一层" ${idx <= 0 ? 'disabled' : ''}><i class="fa-solid fa-chevron-down text-[10px]"></i></button>
+          <button class="layer-del tb-btn" data-idx="${idx}" title="删除图层"><i class="fa-solid fa-trash text-[10px] text-red-400"></i></button>
+        </div>`;
+      }).join('');
+    }
+
+    // 图层操作事件委托
+    $('layer-list').addEventListener('click', e => {
+      const item = e.target.closest('[data-layer-id]');
+      if (!item) return;
+      const id = item.dataset.layerId;
+      const btn = e.target.closest('button');
+      if (!btn) {
+        // 点击行体选中节点
+        selectLayerNode(id);
+        return;
+      }
+      const idx = parseInt(btn.dataset.idx);
+      const nodes = (currentDSL && currentDSL.nodes) || [];
+      const node = nodes[idx];
+      if (!node) return;
+
+      if (btn.classList.contains('layer-vis')) {
+        node.hidden = !node.hidden;
+        // 同步 layout
+        const ln = (currentLayout?.nodes || []).find(n => n.id === node.id);
+        if (ln) ln.hidden = node.hidden;
+        const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
+        renderResult(currentLayout, currentDSL);
+        if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
+      } else if (btn.classList.contains('layer-up')) {
+        if (idx >= nodes.length - 1) return;
+        swapNodes(idx, idx + 1);
+      } else if (btn.classList.contains('layer-down')) {
+        if (idx <= 0) return;
+        swapNodes(idx, idx - 1);
+      } else if (btn.classList.contains('layer-del')) {
+        deleteLayerNode(idx);
+      } else if (btn.classList.contains('layer-select')) {
+        selectLayerNode(id);
+      }
+    });
+
+    function selectLayerNode(id) {
+      selectedNodeId = id;
+      $('tool-delete').disabled = false;
+      if (currentSVGEeditor) currentSVGEeditor.showNodeSelection(id);
+      refreshLayerList();
+    }
+
+    function swapNodes(i, j) {
+      if (!currentDSL || !currentLayout) return;
+      const dNodes = currentDSL.nodes;
+      const lNodes = currentLayout.nodes;
+      [dNodes[i], dNodes[j]] = [dNodes[j], dNodes[i]];
+      [lNodes[i], lNodes[j]] = [lNodes[j], lNodes[i]];
+      // 同步 AST 子节点顺序
+      if (currentAST && currentAST.children) {
+        const ai = currentAST.children.findIndex(c => c.id === dNodes[i].id);
+        const aj = currentAST.children.findIndex(c => c.id === dNodes[j].id);
+        if (ai >= 0 && aj >= 0) {
+          [currentAST.children[ai], currentAST.children[aj]] = [currentAST.children[aj], currentAST.children[ai]];
+        }
+      }
+      const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
+      renderResult(currentLayout, currentDSL);
+      if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
+    }
+
+    function deleteLayerNode(idx) {
+      if (!currentDSL) return;
+      const node = currentDSL.nodes[idx];
+      if (!node) return;
+      const id = node.id;
+      // 删除节点
+      currentDSL.nodes.splice(idx, 1);
+      const li = (currentLayout?.nodes || []).findIndex(n => n.id === id);
+      if (li >= 0) currentLayout.nodes.splice(li, 1);
+      // 删除关联边
+      currentDSL.edges = (currentDSL.edges || []).filter(e => e.from !== id && e.to !== id);
+      currentLayout.edges = (currentLayout?.edges || []).filter(e => e.from !== id && e.to !== id);
+      // 同步 AST
+      if (currentAST && currentAST.children) {
+        currentAST.children = currentAST.children.filter(c => c.id !== id);
+      }
+      if (selectedNodeId === id) {
+        selectedNodeId = null;
+        $('tool-delete').disabled = true;
+        if (currentSVGEeditor) currentSVGEeditor.hideNodeSelection();
+      }
+      const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
+      renderResult(currentLayout, currentDSL);
+      if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
+      showStatus('ok', `<i class="fa-solid fa-circle-check mr-1"></i>已删除图层`);
+    }
 
     // 视觉回归测试
     function refreshBaselineList() {
