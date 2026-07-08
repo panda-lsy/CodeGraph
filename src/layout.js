@@ -92,10 +92,12 @@ export function layoutWithDagre(dsl) {
   const edges = g.edges().map(({ v, w }) => {
     const edgeObj = g.edge(v, w);
     const points = (edgeObj.points || []).map(p => ({ x: p.x, y: p.y }));
-    // 保留 DSL 中边的 style（curve/line），默认 curve
+    // 保留 DSL 中边的 style（curve/line）、dashed、label
     const dslEdge = (dsl.edges || []).find(e => e.from === v && e.to === w);
-    const style = dslEdge?.style || 'curve';
-    return { from: v, to: w, points, style };
+    const style = dslEdge?.style || 'line';
+    const dashed = dslEdge?.dashed || false;
+    const label = dslEdge?.label || '';
+    return { from: v, to: w, points, style, dashed, label };
   });
 
   const graph = g.graph();
@@ -294,10 +296,11 @@ export function mermaidToDSL(code) {
           if (node) {
             ensureNode(node.id, node.text, node.component);
             if (prevNode && arrow) {
-              // 虚线/圆点/叉/双线 → curve；其余 → line
-              const style = /-\.->|o--o|x--x|===|==/.test(arrow) ? 'curve' : 'line';
+              // 虚线 -.-> / 圆点 o--o / 叉 x--x / 双线 === ==> dashed: true
+              const dashed = /-\.->|o--o|x--x|===|==/.test(arrow);
+              const style = 'line';
               const label = pendingLabels[labelIdx++] || '';
-              dsl.edges.push({ from: prevNode.id, to: node.id, label, style });
+              dsl.edges.push({ from: prevNode.id, to: node.id, label, style, dashed });
               if (currentSubgraph) {
                 if (!currentSubgraph.members.includes(prevNode.id)) currentSubgraph.members.push(prevNode.id);
                 if (!currentSubgraph.members.includes(node.id)) currentSubgraph.members.push(node.id);

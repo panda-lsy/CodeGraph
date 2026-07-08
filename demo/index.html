@@ -495,6 +495,12 @@
           <button id="edge-add-waypoint" class="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50" disabled title="添加拐点（在边中点插入）">
             <i class="fa-solid fa-circle-plus mr-1"></i>拐点
           </button>
+          <button id="edge-del-waypoint" class="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50" disabled title="删除最后一个拐点">
+            <i class="fa-solid fa-circle-minus mr-1"></i>删拐点
+          </button>
+          <button id="edge-dashed" class="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50" disabled title="切换虚线/实线">
+            <i class="fa-solid fa-grip-lines mr-1"></i>虚线
+          </button>
           <button id="edge-delete" class="px-2.5 py-1 rounded border border-red-300 dark:border-red-800 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition disabled:opacity-50" disabled title="删除选中的边">
             <i class="fa-solid fa-trash mr-1"></i>删除边
           </button>
@@ -990,6 +996,8 @@
         $('edge-curve').disabled = true;
         $('edge-line').disabled = true;
         $('edge-add-waypoint').disabled = true;
+        $('edge-del-waypoint').disabled = true;
+        $('edge-dashed').disabled = true;
         $('edge-delete').disabled = true;
         if (currentSVGEeditor) currentSVGEeditor.clearWaypoints();
         return;
@@ -998,6 +1006,8 @@
       $('edge-curve').disabled = false;
       $('edge-line').disabled = false;
       $('edge-add-waypoint').disabled = false;
+      $('edge-del-waypoint').disabled = false;
+      $('edge-dashed').disabled = false;
       $('edge-delete').disabled = false;
       refreshWaypoints();
     }
@@ -1526,6 +1536,8 @@
           if (e.button !== 0) return;
           // 点击调整手柄时不取消选中（手柄自己 stopPropagation 了）
           if (e.target.dataset && e.target.dataset.handle) return;
+          // 点击拐点 handle 时不触发选择框（拐点拖拽由 svg-editor 处理）
+          if (e.target.classList && e.target.classList.contains('cg-waypoint')) return;
           let el = e.target;
           let foundId = null;
           while (el && el !== svgEl) {
@@ -1862,7 +1874,9 @@
       if (!choice) return;
 
       if (choice === 'svg') {
-        const blob = new Blob([svg], { type: 'image/svg+xml' });
+        // 导出前将 SVG 转换为合法 XML（foreignObject 内 HTML → XHTML）
+        const exportSvgStr = sanitizeSVGForExport(svg);
+        const blob = new Blob([exportSvgStr], { type: 'image/svg+xml' });
         downloadBlob(blob, 'codegraph.svg');
         showStatus('ok', '<i class="fa-solid fa-circle-check mr-1"></i>已导出 SVG');
       } else if (choice === 'png') {
@@ -1873,8 +1887,9 @@
           const vbMatch = svg.match(/viewBox="([^"]+)"/);
           let vbW = 800, vbH = 600;
           if (vbMatch) { const p = vbMatch[1].split(/\s+/); vbW = parseFloat(p[2]); vbH = parseFloat(p[3]); }
-          const exportSvg = svg.replace(/width="100%"/, `width="${vbW}"`).replace(/height="100%"/, `height="${vbH}"`);
-          const svg64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(exportSvg)));
+          // 导出前清理 SVG（确保 XML 合法，否则 Image.onload 不触发）
+          const exportSvgStr = sanitizeSVGForExport(svg).replace(/width="100%"/, `width="${vbW}"`).replace(/height="100%"/, `height="${vbH}"`);
+          const svg64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(exportSvgStr)));
           img.onload = () => {
             const canvas = document.createElement('canvas');
             canvas.width = vbW * 2; canvas.height = vbH * 2;
@@ -1896,6 +1911,21 @@
       }
     });
 
+    // 导出前清理 SVG：确保是合法 XML，修复 foreignObject 内 HTML 不合法导致的解析错误
+    function sanitizeSVGForExport(svgStr) {
+      let s = svgStr;
+      // 1. 添加 XML 声明（独立 SVG 文件需要）
+      if (!s.startsWith('<?xml')) {
+        s = '<?xml version="1.0" encoding="UTF-8"?>\n' + s;
+      }
+      // 2. 给 foreignObject 添加 XHTML 命名空间声明（确保内部 HTML 被识别为 XHTML）
+      s = s.replace(/<foreignObject(?![^>]*xmlns)/g, '<foreignObject xmlns="http://www.w3.org/1999/xhtml"');
+      // 3. 自闭合 HTML void 标签（<br> → <br/>，<img> → <img/>，<hr> → <hr/>，<input> → <input/>）
+      s = s.replace(/<(br|img|hr|input|meta|link|area|base|col|embed|source|track|wbr)([^>]*?)(?<!\/)>/gi, '<$1$2/>');
+      // 4. 转义裸 &（非 &xxx; 实体形式）
+      s = s.replace(/&(?!#?\w+;)/g, '&amp;');
+      return s;
+    }
     function downloadBlob(blob, filename) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -2055,11 +2085,7 @@
         edge.points = [{ x: fromNode.x + fromNode.width / 2, y: fromNode.y + fromNode.height / 2 }, { x: toNode.x + toNode.width / 2, y: toNode.y + toNode.height / 2 }];
       }
       edge.points.splice(edge.points.length - 1, 0, { x: midX, y: midY });
-      edge.style = 'line'; // 有拐点时用折线
-      if (currentDSL) {
-        const dslEdge = (currentDSL.edges || [])[selectedEdgeIdx];
-        if (dslEdge) dslEdge.style = 'line';
-      }
+      // 保留当前 style（曲线/直线），不强制改为折线
       const svg = $('canvas').querySelector('svg');
       if (svg) {
         const edgeEls = svg.querySelectorAll('.cg-edge path');
@@ -2071,7 +2097,75 @@
       refreshWaypoints();
       $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
       $('export-btn').dataset.svg = layoutToSVG(currentLayout, currentDSL, { darkMode: CONFIG.style.darkMode, width: CONFIG.style.canvasWidth || null, height: CONFIG.style.canvasHeight || null });
-      showStatus('ok', '<i class="fa-solid fa-circle-plus mr-1"></i>已添加拐点（可拖拽移动）');
+      showStatus('ok', '<i class="fa-solid fa-circle-plus mr-1"></i>已添加拐点（可拖拽移动，双击删除）');
+    });
+
+    // 边编辑：删除拐点（双击拐点 handle 删除）
+    // 此功能在 svg-editor 的 waypoint dblclick 中实现，这里提供按钮删除最后一个拐点
+    $('edge-del-waypoint').addEventListener('click', () => {
+      if (selectedEdgeIdx === null || !currentLayout) return;
+      const edge = currentLayout.edges[selectedEdgeIdx];
+      if (!edge || !edge.points || edge.points.length <= 2) return;
+      pushHistory();
+      // 删除最后一个中间拐点
+      edge.points.splice(edge.points.length - 2, 1);
+      const svg = $('canvas').querySelector('svg');
+      if (svg) {
+        const edgeEls = svg.querySelectorAll('.cg-edge path');
+        if (edgeEls[selectedEdgeIdx]) {
+          const newPath = recalcEdgePath(currentLayout, edge);
+          if (newPath) edgeEls[selectedEdgeIdx].setAttribute('d', newPath);
+        }
+      }
+      refreshWaypoints();
+      $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
+      $('export-btn').dataset.svg = layoutToSVG(currentLayout, currentDSL, { darkMode: CONFIG.style.darkMode, width: CONFIG.style.canvasWidth || null, height: CONFIG.style.canvasHeight || null });
+      showStatus('ok', '<i class="fa-solid fa-circle-minus mr-1"></i>已删除拐点');
+    });
+
+    // 双击拐点删除
+    svgEl.addEventListener('waypoint-remove', e => {
+      const { edgeId, wpIdx } = e.detail;
+      const idx = parseInt(edgeId);
+      const edge = currentLayout?.edges?.[idx];
+      if (!edge || !edge.points || edge.points.length <= 2) return;
+      pushHistory();
+      edge.points.splice(wpIdx, 1);
+      const svg = $('canvas').querySelector('svg');
+      if (svg) {
+        const edgeEls = svg.querySelectorAll('.cg-edge path');
+        if (edgeEls[idx]) {
+          const newPath = recalcEdgePath(currentLayout, edge);
+          if (newPath) edgeEls[idx].setAttribute('d', newPath);
+        }
+      }
+      refreshWaypoints();
+      $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
+      $('export-btn').dataset.svg = layoutToSVG(currentLayout, currentDSL, { darkMode: CONFIG.style.darkMode, width: CONFIG.style.canvasWidth || null, height: CONFIG.style.canvasHeight || null });
+      showStatus('ok', '<i class="fa-solid fa-circle-minus mr-1"></i>已删除拐点');
+    });
+
+    // 边编辑：切换虚线/实线
+    $('edge-dashed').addEventListener('click', () => {
+      if (selectedEdgeIdx === null || !currentLayout) return;
+      const edge = currentLayout.edges[selectedEdgeIdx];
+      if (!edge) return;
+      pushHistory();
+      edge.dashed = !edge.dashed;
+      if (currentDSL) {
+        const dslEdge = (currentDSL.edges || [])[selectedEdgeIdx];
+        if (dslEdge) dslEdge.dashed = edge.dashed;
+      }
+      const svg = $('canvas').querySelector('svg');
+      if (svg) {
+        const edgeEls = svg.querySelectorAll('.cg-edge path');
+        if (edgeEls[selectedEdgeIdx]) {
+          edgeEls[selectedEdgeIdx].setAttribute('stroke-dasharray', edge.dashed ? '6 4' : 'none');
+        }
+      }
+      $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
+      $('export-btn').dataset.svg = layoutToSVG(currentLayout, currentDSL, { darkMode: CONFIG.style.darkMode, width: CONFIG.style.canvasWidth || null, height: CONFIG.style.canvasHeight || null });
+      showStatus('ok', '<i class="fa-solid fa-grip-lines mr-1"></i>' + (edge.dashed ? '已切换为虚线' : '已切换为实线'));
     });
 
     // 边编辑：删除选中的边
@@ -2103,6 +2197,8 @@
       $('edge-curve').disabled = true;
       $('edge-line').disabled = true;
       $('edge-add-waypoint').disabled = true;
+      $('edge-del-waypoint').disabled = true;
+      $('edge-dashed').disabled = true;
       $('edge-delete').disabled = true;
       if (currentSVGEeditor) {
         currentSVGEeditor.clearWaypoints();

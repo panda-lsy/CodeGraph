@@ -169,28 +169,55 @@ function renderEdge(edge, theme, nodeMap) {
   const style = edge.style || 'line';
   let d;
 
-  if (style === 'curve' || mid.length === 0) {
-    // 曲线模式或无中间点：用三次贝塞尔曲线连接首尾
-    // 控制点偏移量基于首尾距离
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const offset = Math.max(20, dist * 0.4);
-    // 控制点方向：垂直于连线方向
-    const c1x = start.x + dx * 0.3;
-    const c1y = start.y + dy * 0.3 + (Math.abs(dx) > Math.abs(dy) ? 0 : offset * 0.3);
-    const c2x = start.x + dx * 0.7;
-    const c2y = start.y + dy * 0.7 + (Math.abs(dx) > Math.abs(dy) ? 0 : offset * 0.3);
-    d = `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${end.x.toFixed(1)} ${end.y.toFixed(1)}`;
+  if (style === 'curve') {
+    // 曲线模式：用三次贝塞尔曲线平滑连接所有点（含拐点）
+    if (all.length === 2) {
+      // 仅两点：直接贝塞尔
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const offset = Math.max(20, dist * 0.4);
+      const isHorizontal = Math.abs(dx) > Math.abs(dy);
+      const c1x = start.x + dx * 0.3 + (isHorizontal ? 0 : offset * 0.3);
+      const c1y = start.y + dy * 0.3 + (isHorizontal ? offset * 0.3 : 0);
+      const c2x = start.x + dx * 0.7 + (isHorizontal ? 0 : offset * 0.3);
+      const c2y = start.y + dy * 0.7 + (isHorizontal ? offset * 0.3 : 0);
+      d = `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${end.x.toFixed(1)} ${end.y.toFixed(1)}`;
+    } else {
+      // 多点（含拐点）：用 S 命令平滑连接，每段贝塞尔
+      const dx0 = all[1].x - all[0].x;
+      const dy0 = all[1].y - all[0].y;
+      const dist0 = Math.sqrt(dx0 * dx0 + dy0 * dy0);
+      const c1x = all[0].x + dx0 * 0.3;
+      const c1y = all[0].y + dy0 * 0.3;
+      d = `M ${all[0].x.toFixed(1)} ${all[0].y.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${all[1].x.toFixed(1)} ${all[1].y.toFixed(1)}, ${all[1].x.toFixed(1)} ${all[1].y.toFixed(1)}`;
+      for (let i = 1; i < all.length - 1; i++) {
+        d += ` S ${all[i].x.toFixed(1)} ${all[i].y.toFixed(1)}, ${all[i + 1].x.toFixed(1)} ${all[i + 1].y.toFixed(1)}`;
+      }
+    }
   } else {
     // 折线模式
     d = all.map((p, i) => (i === 0 ? `M ${p.x.toFixed(1)} ${p.y.toFixed(1)}` : `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)).join(' ');
   }
 
+  // 虚线样式
+  const strokeDasharray = edge.dashed ? '6 4' : 'none';
+  // 边标签（线上文本）
+  let labelSVG = '';
+  if (edge.label) {
+    // 计算标签位置：路径中点（取 all 数组中间点）
+    const midIdx = Math.floor(all.length / 2);
+    const labelPos = midIdx >= all.length ? all[all.length - 1] : all[midIdx];
+    const labelText = escapeXML(edge.label);
+    labelSVG = `<rect x="${(labelPos.x - labelText.length * 3.5).toFixed(1)}" y="${(labelPos.y - 9).toFixed(1)}" width="${(labelText.length * 7).toFixed(1)}" height="18" fill="${theme.bg || '#fff'}" opacity="0.9" rx="2"/>
+    <text x="${labelPos.x.toFixed(1)}" y="${(labelPos.y + 4).toFixed(1)}" text-anchor="middle" font-family="${theme.fontFamily}" font-size="12" fill="${theme.edgeColor}">${labelText}</text>`;
+  }
+
   return `
   <g class="cg-edge">
     <path d="${d}" fill="none" stroke="${theme.edgeColor}" stroke-width="${theme.strokeWidth}"
-          marker-end="url(#arrowhead)"/>
+          stroke-dasharray="${strokeDasharray}" marker-end="url(#arrowhead)"/>
+    ${labelSVG}
   </g>`;
 }
 
@@ -366,9 +393,22 @@ export function recalcEdgePath(layout, edge) {
   if (toRot) end = rotatePoint(end.x, end.y, toCx, toCy, toRot);
 
   const style = edge.style || 'curve';
-  // 有拐点时强制用折线（L 连接），拐点本身就是路径节点
+  // 有拐点时：曲线用 S 命令平滑连接，折线用 L 连接
   if (midPoints.length > 0) {
     const all = [start, ...midPoints, end];
+    if (style === 'curve') {
+      // 曲线模式：用 S 命令平滑连接所有拐点
+      const dx0 = all[1].x - all[0].x;
+      const dy0 = all[1].y - all[0].y;
+      const c1x = all[0].x + dx0 * 0.3;
+      const c1y = all[0].y + dy0 * 0.3;
+      let path = `M ${all[0].x.toFixed(1)} ${all[0].y.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${all[1].x.toFixed(1)} ${all[1].y.toFixed(1)}, ${all[1].x.toFixed(1)} ${all[1].y.toFixed(1)}`;
+      for (let i = 1; i < all.length - 1; i++) {
+        path += ` S ${all[i].x.toFixed(1)} ${all[i].y.toFixed(1)}, ${all[i + 1].x.toFixed(1)} ${all[i + 1].y.toFixed(1)}`;
+      }
+      return path;
+    }
+    // 折线模式
     return all.map((p, i) => (i === 0 ? `M ${p.x.toFixed(1)} ${p.y.toFixed(1)}` : `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)).join(' ');
   }
   // 无拐点：曲线用贝塞尔，直线用两点连接

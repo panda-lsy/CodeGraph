@@ -1415,6 +1415,12 @@ export function initSVGEditor(svg, options = {}) {
         circle.dataset.edgeId = edgeId;
         circle.dataset.wpIdx = String(i + 1);
         circle.style.cursor = 'move';
+        // 双击删除拐点
+        circle.addEventListener('dblclick', ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          svgEl.dispatchEvent(new CustomEvent('waypoint-remove', { detail: { edgeId, wpIdx: i + 1 } }));
+        });
         svgEl.appendChild(circle);
       });
     },
