@@ -241,14 +241,20 @@ export function layoutToSVG(layout, dsl, options = {}) {
       });
     });
   }
-  // 加 padding
-  let vbMinX = minX - pad;
-  let vbMinY = minY - pad;
-  let vbW = (maxX - minX) + pad * 2;
-  let vbH = (maxY - minY) + pad * 2;
-  // 用户指定宽高时覆盖（仍以内容左上角为原点）
+  // 加 padding，并扩展画布留出充足操作空间 + 内容居中
+  const contentW = maxX - minX;
+  const contentH = maxY - minY;
+  const contentCX = minX + contentW / 2;
+  const contentCY = minY + contentH / 2;
+  // 目标画布尺寸：内容尺寸 × 1.6，但不小于 900×600，确保有充足操作空间
+  let vbW = Math.max(contentW * 1.6, 900);
+  let vbH = Math.max(contentH * 1.6, 600);
+  // 用户指定宽高时覆盖
   if (options.width != null) vbW = options.width;
   if (options.height != null) vbH = options.height;
+  // 以内容中心为画布中心，居中放置
+  let vbMinX = contentCX - vbW / 2;
+  let vbMinY = contentCY - vbH / 2;
 
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
   const groupsSVG = renderGroups(layout, dsl, theme);

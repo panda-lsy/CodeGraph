@@ -79,6 +79,14 @@ export function renderNodeText(text, options = {}) {
     return placeholder;
   });
 
+  // 2.5 保护 HTML 标签（如 <br>、<sub>、<sup>），避免被 marked 转义或改写
+  const htmlMap = [];
+  processed = processed.replace(/<\/?[a-zA-Z][^>]*>/g, (m) => {
+    const placeholder = `\x00HTM${htmlMap.length}\x00`;
+    htmlMap.push(m);
+    return placeholder;
+  });
+
   // 3. 用 marked 解析 Markdown（内联模式，不生成 <p> 包裹）
   let html;
   if (typeof window !== 'undefined' && window.marked) {
@@ -100,6 +108,11 @@ export function renderNodeText(text, options = {}) {
   // 5. 恢复转义字符（保留 \ 转义的效果）
   html = html.replace(/\x00ESC(\d+)\x00/g, (m, idx) => {
     return escapeHTML(escapeMap[parseInt(idx)]);
+  });
+
+  // 5.5 恢复 HTML 标签（<br> 等原样输出，实现换行/下标等效果）
+  html = html.replace(/\x00HTM(\d+)\x00/g, (m, idx) => {
+    return htmlMap[parseInt(idx)];
   });
 
   // 6. 应用文字样式
@@ -124,10 +137,11 @@ export function getLastErrors() {
   return _lastErrors;
 }
 
-// 检测文本是否包含 Markdown/TeX 语法
+// 检测文本是否包含 Markdown/TeX 语法 / HTML 标签 / 换行（需走 foreignObject 富文本渲染）
 export function hasRichText(text) {
   if (!text) return false;
-  return /(\*\*|__|`|\$|\\\[|\\\(|\[.*\]\()/.test(text);
+  // Markdown/TeX 语法、HTML 标签（如 <br>、<b>、<sub>）、换行符
+  return /(\*\*|__|`|\$|\\\[|\\\(|\[.*\]\(|<br\s*\/?>|<\/?[a-zA-Z][^>]*>|\n)/.test(text);
 }
 
 // 默认字体选项

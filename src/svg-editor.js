@@ -176,7 +176,7 @@ export function initSVGEditor(svg, options = {}) {
   // 统一 mousedown 处理器
   const onMouseDown = e => {
     // 正在编辑文本时，点击非 input 区域 → 先结束编辑
-    if (editingInput && e.target.tagName !== 'INPUT') {
+    if (editingInput && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
       editingInput.blur();
     }
 
@@ -740,10 +740,9 @@ export function initSVGEditor(svg, options = {}) {
     fo.setAttribute('y', '0');
     fo.setAttribute('width', Math.max(size.width, 60));
     fo.setAttribute('height', Math.max(size.height, 30));
-    const input = document.createElement('input');
-    input.type = 'text';
+    const input = document.createElement('textarea');
     input.value = oldText;
-    input.style.cssText = `width:100%;height:100%;border:2px solid #6366f1;border-radius:4px;text-align:center;font-size:14px;background:#fff;color:#000;outline:none;`;
+    input.style.cssText = `width:100%;height:100%;border:2px solid #6366f1;border-radius:4px;text-align:center;font-size:14px;background:#fff;color:#000;outline:none;resize:none;padding:4px;box-sizing:border-box;line-height:1.3;`;
     fo.appendChild(input);
     nodeEl.appendChild(fo);
     input.focus();
@@ -776,7 +775,14 @@ export function initSVGEditor(svg, options = {}) {
     };
     input.addEventListener('blur', finishEdit);
     input.addEventListener('keydown', ev => {
-      if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); }
+      if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); input.blur(); }
+      // Shift+Space → 插入换行
+      if (ev.key === ' ' && ev.shiftKey) {
+        ev.preventDefault();
+        const s = input.selectionStart, e = input.selectionEnd;
+        input.value = input.value.slice(0, s) + '\n' + input.value.slice(e);
+        input.selectionStart = input.selectionEnd = s + 1;
+      }
       if (ev.key === 'Escape') { input.value = oldText; input.blur(); }
     });
     e.preventDefault();

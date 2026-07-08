@@ -379,18 +379,23 @@ export function autoFitNodeSize(text, textStyle, component) {
   }
   // 粗体略宽
   const boldMul = textStyle?.bold ? 1.05 : 1;
-  // 估算字符宽度（中文字符约 1em，英文字符约 0.6em）
-  const chars = Array.from(text);
-  let textWidth = 0;
-  chars.forEach(ch => {
-    if (/[\u4e00-\u9fa5\uff00-\uffef]/.test(ch)) textWidth += fontSize * 1.0;
-    else if (/[A-Z]/.test(ch)) textWidth += fontSize * 0.65;
-    else if (/[a-z0-9]/.test(ch)) textWidth += fontSize * 0.55;
-    else textWidth += fontSize * 0.4;
+  // 按 \n 和 <br> 拆分为多行，分别估算每行宽度
+  const rawLines = String(text).split(/\n|<br\s*\/?>/i);
+  let maxLineWidth = 0;
+  rawLines.forEach(line => {
+    const chars = Array.from(line);
+    let w = 0;
+    chars.forEach(ch => {
+      if (/[\u4e00-\u9fa5\uff00-\uffef]/.test(ch)) w += fontSize * 1.0;
+      else if (/[A-Z]/.test(ch)) w += fontSize * 0.65;
+      else if (/[a-z0-9]/.test(ch)) w += fontSize * 0.55;
+      else w += fontSize * 0.4;
+    });
+    if (w > maxLineWidth) maxLineWidth = w;
   });
-  textWidth *= boldMul;
-  // 估算行数（按 80px 宽度折行，但至少 1 行）
-  const lines = Math.max(1, Math.ceil(textWidth / 200));
+  const textWidth = maxLineWidth * boldMul;
+  // 行数 = 显式换行数（至少 1）
+  const lines = Math.max(1, rawLines.length);
   const lineHeight = fontSize * 1.3;
   const textHeight = lines * lineHeight;
 
@@ -403,7 +408,7 @@ export function autoFitNodeSize(text, textStyle, component) {
     triangle: 1.3, document: 1.1, note: 1.1
   }[component] || 1.0;
 
-  const neededWidth = Math.ceil((textWidth / lines + padding * 2) * shapeMul);
+  const neededWidth = Math.ceil((textWidth + padding * 2) * shapeMul);
   const neededHeight = Math.ceil(textHeight + padding * 2);
 
   // 不小于默认尺寸

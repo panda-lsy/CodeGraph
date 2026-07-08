@@ -444,6 +444,7 @@
           <div class="tb-sep"></div>
           <button class="tb-btn" id="tb-bold" title="粗体"><i class="fa-solid fa-bold"></i></button>
           <button class="tb-btn" id="tb-italic" title="斜体"><i class="fa-solid fa-italic"></i></button>
+          <button class="tb-btn" id="tb-br" title="插入换行 (Shift+空格)"><i class="fa-solid fa-return"></i></button>
           <div class="tb-sep"></div>
           <div class="tb-palette" id="tb-palette"></div>
           <input type="color" id="tb-color" value="#1e293b" title="自定义颜色" style="width:24px;height:24px;padding:0;border:none;cursor:pointer;background:transparent;">
@@ -469,6 +470,8 @@
           <span><i class="fa-solid fa-vector-square mr-1"></i>Shift+点击/框选多选</span>
           <span class="opacity-40">·</span>
           <span><i class="fa-solid fa-mouse-pointer mr-1"></i>双击编辑</span>
+          <span class="opacity-40">·</span>
+          <span><i class="fa-solid fa-return mr-1"></i>Shift+空格换行</span>
           <span class="opacity-40">·</span>
           <span><i class="fa-solid fa-keyboard mr-1"></i>Ctrl+Z/C/X/V</span>
           <span class="opacity-40">·</span>
@@ -1221,6 +1224,15 @@
         const btn = $('tb-italic');
         const active = btn.classList.toggle('active');
         updateNodeTextStyle('italic', active);
+      });
+      // 换行按钮：在选中节点文本末尾追加换行符
+      $('tb-br').addEventListener('click', () => {
+        if (!selectedNodeId || !currentLayout) return;
+        const n = (currentLayout.nodes || []).find(x => x.id === selectedNodeId);
+        if (!n) return;
+        pushHistory();
+        const newText = (n.text || '') + '\n';
+        onNodeTextEdit(selectedNodeId, newText);
       });
       // 阻止工具栏上的 mousedown 冒泡到 canvas（避免取消选中）
       $('text-toolbar').addEventListener('mousedown', e => e.stopPropagation());
