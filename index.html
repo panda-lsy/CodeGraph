@@ -182,6 +182,11 @@
             position: relative;
             z-index: 10;
         }
+
+        .scroll-indicator {
+            position: absolute;
+            z-index: 20;
+        }
         
         /* Mermaid custom styling */
         .mermaid {
@@ -304,7 +309,7 @@
         </div>
         
         <!-- Scroll indicator -->
-        <div class="absolute bottom-8 left-1/2 transform -translate-x-1/2 scroll-indicator">
+        <div class="bottom-8 left-1/2 transform -translate-x-1/2 scroll-indicator">
             <div class="w-6 h-10 border-2 border-white/30 rounded-full flex justify-center pt-2">
                 <div class="w-1.5 h-3 bg-white/60 rounded-full animate-bounce"></div>
             </div>
