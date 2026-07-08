@@ -339,6 +339,7 @@ export function listThemes() {
 
 // 重新计算单条边的 path（节点移动后更新连线）
 // layout: 当前布局（含 nodes/edges），edge: 要更新的边
+// 保留 edge.points 中的拐点，起终点裁剪到节点边界
 export function recalcEdgePath(layout, edge) {
   const fromNode = (layout.nodes || []).find(n => n.id === edge.from);
   const toNode = (layout.nodes || []).find(n => n.id === edge.to);
@@ -347,19 +348,30 @@ export function recalcEdgePath(layout, edge) {
   const fromCy = fromNode.y + fromNode.height / 2;
   const toCx = toNode.x + toNode.width / 2;
   const toCy = toNode.y + toNode.height / 2;
-  // 节点旋转时，borderPoint 在未旋转本地坐标系下计算，需要做坐标变换：
-  //   1. 把对方中心反向旋转到本节点未旋转坐标系
-  //   2. 计算 borderPoint
-  //   3. 把边界点正向旋转回世界坐标系
+
+  // 中间拐点（保留用户手动添加的拐点）
+  const midPoints = (edge.points || []).slice(1, -1).map(p => ({ x: p.x, y: p.y }));
+
+  // 节点旋转时，borderPoint 在未旋转本地坐标系下计算，需要做坐标变换
   const fromRot = fromNode.rotation || 0;
   const toRot = toNode.rotation || 0;
-  const startTarget = fromRot ? rotatePoint(toCx, toCy, fromCx, fromCy, -fromRot) : { x: toCx, y: toCy };
-  const endTarget = toRot ? rotatePoint(fromCx, fromCy, toCx, toCy, -toRot) : { x: fromCx, y: fromCy };
+  // 起点参考方向：朝向第一个拐点（若有）或终点中心
+  const startAim = midPoints.length ? midPoints[0] : { x: toCx, y: toCy };
+  const endAim = midPoints.length ? midPoints[midPoints.length - 1] : { x: fromCx, y: fromCy };
+  const startTarget = fromRot ? rotatePoint(startAim.x, startAim.y, fromCx, fromCy, -fromRot) : startAim;
+  const endTarget = toRot ? rotatePoint(endAim.x, endAim.y, toCx, toCy, -toRot) : endAim;
   let start = borderPoint(fromNode, startTarget.x, startTarget.y);
   let end = borderPoint(toNode, endTarget.x, endTarget.y);
   if (fromRot) start = rotatePoint(start.x, start.y, fromCx, fromCy, fromRot);
   if (toRot) end = rotatePoint(end.x, end.y, toCx, toCy, toRot);
+
   const style = edge.style || 'curve';
+  // 有拐点时强制用折线（L 连接），拐点本身就是路径节点
+  if (midPoints.length > 0) {
+    const all = [start, ...midPoints, end];
+    return all.map((p, i) => (i === 0 ? `M ${p.x.toFixed(1)} ${p.y.toFixed(1)}` : `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)).join(' ');
+  }
+  // 无拐点：曲线用贝塞尔，直线用两点连接
   if (style === 'curve') {
     const dx = end.x - start.x;
     const dy = end.y - start.y;

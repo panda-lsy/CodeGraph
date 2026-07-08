@@ -184,7 +184,7 @@
         }
 
         .scroll-indicator {
-            position: absolute;
+            position: relative;
             z-index: 20;
         }
         
@@ -306,12 +306,12 @@
                     <div class="text-sm text-gray-400 mt-1">生成时间</div>
                 </div>
             </div>
-        </div>
-        
-        <!-- Scroll indicator -->
-        <div class="bottom-8 left-1/2 transform -translate-x-1/2 scroll-indicator">
-            <div class="w-6 h-10 border-2 border-white/30 rounded-full flex justify-center pt-2">
-                <div class="w-1.5 h-3 bg-white/60 rounded-full animate-bounce"></div>
+
+            <!-- Scroll indicator（位于 stats 下方，流式布局） -->
+            <div class="mt-10 flex justify-center scroll-indicator">
+                <div class="w-6 h-10 border-2 border-white/30 rounded-full flex justify-center pt-2">
+                    <div class="w-1.5 h-3 bg-white/60 rounded-full animate-bounce"></div>
+                </div>
             </div>
         </div>
     </section>

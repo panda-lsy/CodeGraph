@@ -4,18 +4,32 @@
 
 import { CONFIG } from './config.js';
 import { applyConstraints } from './constraint.js';
+import { autoFitNodeSize } from './components.js';
 
-// 估算节点尺寸（根据文本长度与组件类型）
+// 估算节点尺寸（使用 autoFitNodeSize 精确估算文本宽度）
 function estimateNodeSize(text, component, node) {
   // 图片组件：使用节点自带尺寸或默认 120×90
   if (component === 'image') {
     if (node && node.width && node.height) return { width: node.width, height: node.height };
     return { width: 120, height: 90 };
   }
+  // 优先使用 autoFitNodeSize（支持多行、Markdown/TeX、字符宽度精确估算）
+  if (component !== 'image' && text) {
+    try {
+      const size = autoFitNodeSize(text, component || 'rect', node?.textStyle, { width: 80, height: 40 });
+      // 圆形/菱形等方形组件：宽高取较大值保证方形
+      const isSquare = ['circle', 'diamond', 'molecule', 'hexagon'].includes(component);
+      if (isSquare) {
+        const m = Math.max(size.width, size.height);
+        return { width: m, height: m };
+      }
+      return size;
+    } catch (e) {}
+  }
+  // 后备：简单估算
   const len = (text || '').length;
-  // 圆形/菱形/分子需要更紧凑的方形
   const isSquare = ['circle', 'diamond', 'molecule', 'hexagon'].includes(component);
-  const baseW = Math.max(isSquare ? 80 : 80, len * 16 + 32);
+  const baseW = Math.max(80, len * 12 + 24);
   const width = isSquare ? Math.max(baseW, 80) : baseW;
   const height = isSquare ? Math.max(width, 60) : 40;
   return { width, height };
@@ -238,9 +252,12 @@ export function mermaidToDSL(code) {
     }
 
     // subgraph 开始
-    const sgMatch = line.match(/^subgraph\s+(\S+)(?:\s*\["?([^"\]]*)"?\])?/);
+    // id 只匹配字母/数字/下划线/中文，避免误吞形状字符 [(" 等
+    // label 支持引号包裹或裸文本：subgraph L1["输入层 / Input Layer"] 或 subgraph L1[输入层] 或 subgraph L1
+    const sgMatch = line.match(/^subgraph\s+([A-Za-z0-9_\u4e00-\u9fa5]+)(?:\s*\[\s*"((?:[^"\\]|\\.)*)"\s*\]|\s*\[([^\]]*)\]|\s+"([^"]*)")?\s*$/);
     if (sgMatch) {
-      currentSubgraph = { id: sgMatch[1], label: sgMatch[2] || sgMatch[1], members: [] };
+      const label = sgMatch[2] != null ? sgMatch[2] : (sgMatch[3] != null ? sgMatch[3] : (sgMatch[4] != null ? sgMatch[4] : sgMatch[1]));
+      currentSubgraph = { id: sgMatch[1], label, members: [] };
       dsl.groups.push(currentSubgraph);
       return;
     }
