@@ -195,6 +195,7 @@ function renderGroups(layout, dsl, theme) {
   if (!dsl.groups) return '';
   const nodeMap = new Map(layout.nodes.map(n => [n.id, n]));
   return dsl.groups.map((g, i) => {
+    if (g.hidden) return '';
     const members = (g.members || []).map(id => nodeMap.get(id)).filter(Boolean);
     if (!members.length) return '';
     // 优先使用 group 自身的 x/y/width/height（支持手动拉伸），否则按成员包围盒计算

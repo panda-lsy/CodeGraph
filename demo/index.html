@@ -381,6 +381,9 @@
             <button id="connect-toggle" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="节点连接模式（点击两个节点创建边）">
               <i class="fa-solid fa-link"></i>
             </button>
+            <button id="subgraph-toggle" class="text-xs px-2 py-1 rounded border border-cyan-300 dark:border-cyan-700 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 transition" title="圈围子图：点击多个节点后再次点击完成">
+              <i class="fa-solid fa-object-group"></i>
+            </button>
             <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5"></div>
             <!-- 撤销/重做 -->
             <button id="tool-undo" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed" title="撤销 (Ctrl+Z)" disabled>
@@ -803,11 +806,24 @@
       const svgEl = $('canvas').querySelector('svg');
       if (!svgEl) return;
       svgEl.querySelectorAll('.cg-multi-sel').forEach(el => el.remove());
-      if (!selectedNodeIds.size) return;
       const layoutMap = new Map((currentLayout?.nodes || []).map(n => [n.id, n]));
       const overlay = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       overlay.setAttribute('class', 'cg-multi-sel');
       overlay.style.pointerEvents = 'none';
+      // 圈围子图模式：用青色高亮已选成员
+      if (subgraphMode && subgraphMembers.length) {
+        subgraphMembers.forEach(id => {
+          const n = layoutMap.get(id);
+          if (!n) return;
+          const box = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          box.setAttribute('x', n.x - 3); box.setAttribute('y', n.y - 3);
+          box.setAttribute('width', n.width + 6); box.setAttribute('height', n.height + 6);
+          box.setAttribute('fill', 'rgba(6,182,212,0.12)'); box.setAttribute('stroke', '#06b6d4');
+          box.setAttribute('stroke-width', '2'); box.setAttribute('stroke-dasharray', '4 2');
+          overlay.appendChild(box);
+        });
+      }
+      if (!selectedNodeIds.size) { svgEl.appendChild(overlay); return; }
       selectedNodeIds.forEach(id => {
         const n = layoutMap.get(id);
         if (!n) return;
@@ -1423,6 +1439,8 @@
         });
         // 节点点击选中（支持 Shift/Ctrl 多选 + 框选）
         svgEl.addEventListener('mousedown', e => {
+          // 仅响应左键，右键由 svg-editor 处理（临时平移/框选）
+          if (e.button !== 0) return;
           // 点击调整手柄时不取消选中（手柄自己 stopPropagation 了）
           if (e.target.dataset && e.target.dataset.handle) return;
           let el = e.target;
@@ -1433,6 +1451,16 @@
           }
           const multi = e.shiftKey || e.ctrlKey || e.metaKey;
           if (foundId) {
+            // 圈围子图模式：点击节点切换加入/移除，不走常规选中逻辑
+            if (subgraphMode) {
+              e.preventDefault();
+              e.stopPropagation();
+              if (subgraphMembers.includes(foundId)) subgraphMembers = subgraphMembers.filter(x => x !== foundId);
+              else subgraphMembers.push(foundId);
+              refreshMultiSelection();
+              showStatus('info', '<i class="fa-solid fa-object-group mr-1"></i>圈围子图：已选 ' + subgraphMembers.length + ' 个节点（至少 2 个），再次点击按钮完成');
+              return;
+            }
             if (multi) {
               // 多选切换
               if (selectedNodeIds.has(foundId)) selectedNodeIds.delete(foundId);
@@ -1477,6 +1505,32 @@
         });
         // 阻止画布默认右键菜单
         svgEl.addEventListener('contextmenu', e => e.preventDefault());
+        // group 拖拽：实时更新 group 和成员节点的坐标
+        svgEl.addEventListener('group-moved', e => {
+          const { id, x, y, dx, dy, members } = e.detail;
+          // 更新 group 数据
+          if (currentDSL?.groups) {
+            const g = currentDSL.groups.find(g => g.id === id || ('group-' + currentDSL.groups.indexOf(g)) === id);
+            if (g) { g.x = x; g.y = y; g.width = g.width || (g._origW); g.height = g.height || (g._origH); }
+          }
+          // 更新成员节点坐标
+          if (currentLayout && members) {
+            members.forEach(m => {
+              const ln = (currentLayout.nodes || []).find(n => n.id === m.id);
+              if (ln) { ln.x = m.origX + dx; ln.y = m.origY + dy; ln.cx = ln.x + ln.width / 2; ln.cy = ln.y + ln.height / 2; }
+              const dn = currentDSL?.nodes?.find(n => n.id === m.id);
+              if (dn) { dn.x = ln.x; dn.y = ln.y; }
+            });
+            // 重算关联边
+            const edgeEls = svgEl.querySelectorAll('.cg-edge path');
+            (currentLayout.edges || []).forEach((edge, idx) => {
+              const moved = members.some(m => m.id === edge.from || m.id === edge.to);
+              if (!moved) return;
+              const newPath = recalcEdgePath(currentLayout, edge);
+              if (newPath && edgeEls[idx]) edgeEls[idx].setAttribute('d', newPath);
+            });
+          }
+        });
         // 节点尺寸调整（由 svg-editor 的手柄拖拽派发）
         svgEl.addEventListener('node-resized', e => {
           const { id, x, y, width, height } = e.detail;
@@ -1801,6 +1855,41 @@
       } else {
         $('connect-toggle').classList.remove('border-primary', 'text-primary', 'bg-indigo-50', 'dark:bg-indigo-950/40');
         showStatus('info', '<i class="fa-solid fa-link mr-1"></i>连接模式已退出');
+      }
+    });
+
+    // 圈围子图模式：依次点击节点加入子图，再次点击按钮完成
+    let subgraphMode = false;
+    let subgraphMembers = [];
+    $('subgraph-toggle').addEventListener('click', () => {
+      if (!currentSVGEeditor || !currentLayout) {
+        showStatus('info', '<i class="fa-solid fa-circle-info mr-1"></i>请先生成图形');
+        return;
+      }
+      if (subgraphMode) {
+        // 完成圈围
+        if (subgraphMembers.length >= 2) {
+          pushHistory();
+          const gId = 'G' + Date.now().toString(36).slice(-5);
+          const g = { id: gId, label: '子图 ' + ((currentDSL.groups?.length || 0) + 1), members: [...subgraphMembers] };
+          if (!currentDSL.groups) currentDSL.groups = [];
+          currentDSL.groups.push(g);
+          const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
+          renderResult(currentLayout, currentDSL);
+          if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
+          showStatus('info', '<i class="fa-solid fa-object-group mr-1"></i>子图已创建（' + subgraphMembers.length + ' 个成员）');
+        } else {
+          showStatus('info', '<i class="fa-solid fa-circle-info mr-1"></i>子图至少需要 2 个成员');
+        }
+        subgraphMode = false;
+        subgraphMembers = [];
+        $('subgraph-toggle').classList.remove('bg-cyan-500', 'text-white');
+        refreshMultiSelection();
+      } else {
+        subgraphMode = true;
+        subgraphMembers = [];
+        $('subgraph-toggle').classList.add('bg-cyan-500', 'text-white');
+        showStatus('info', '<i class="fa-solid fa-object-group mr-1"></i>圈围子图：点击节点加入（至少 2 个），再次点击按钮完成');
       }
     });
 
@@ -2304,13 +2393,28 @@
       const list = $('layer-list');
       const countEl = $('layer-count');
       const nodes = (currentDSL && currentDSL.nodes) || [];
-      countEl.textContent = nodes.length ? `（${nodes.length}）` : '';
-      if (!nodes.length) {
+      const groups = (currentDSL && currentDSL.groups) || [];
+      const total = nodes.length + groups.length;
+      countEl.textContent = total ? `（${total}）` : '';
+      if (!total) {
         list.innerHTML = '<div class="text-xs text-slate-400 text-center py-4">暂无图层，生成或添加节点后显示</div>';
         return;
       }
-      // 倒序显示（顶层在前）
-      list.innerHTML = nodes.slice().reverse().map((n, revIdx) => {
+      const parts = [];
+      // groups 在前
+      groups.forEach((g, idx) => {
+        const label = g.label || g.id || `子图${idx + 1}`;
+        const isHidden = g.hidden === true;
+        parts.push(`<div class="flex items-center gap-1.5 px-2 py-1.5 rounded border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20 hover:border-cyan-500 transition" data-layer-group-id="${g.id || ('group-' + idx)}">
+          <button class="layer-vis tb-btn" data-gidx="${idx}" title="${isHidden ? '显示' : '隐藏'}"><i class="fa-solid ${isHidden ? 'fa-eye-slash' : 'fa-eye'} ${isHidden ? 'text-slate-400' : 'text-cyan-500'}"></i></button>
+          <i class="fa-solid fa-object-group text-cyan-500 text-[10px] flex-shrink-0"></i>
+          <span class="flex-1 text-xs truncate cursor-pointer layer-select-group" data-gidx="${idx}" title="子图: ${label}">${label}</span>
+          <button class="layer-fill tb-btn" data-gidx="${idx}" title="切换填充"><i class="fa-solid fa-fill-drip text-[10px]"></i></button>
+          <button class="layer-del tb-btn" data-gidx="${idx}" title="删除子图"><i class="fa-solid fa-trash text-[10px] text-red-400"></i></button>
+        </div>`);
+      });
+      // 节点倒序（顶层在前）
+      parts.push(nodes.slice().reverse().map((n, revIdx) => {
         const idx = nodes.length - 1 - revIdx;
         const label = n.text || (n.imageSrc ? '图片' : '') || getComponentLabel(n.component) || n.id;
         const compLabel = getComponentLabel(n.component) || n.component;
@@ -2324,11 +2428,54 @@
           <button class="layer-down tb-btn" data-idx="${idx}" title="下移一层" ${idx <= 0 ? 'disabled' : ''}><i class="fa-solid fa-chevron-down text-[10px]"></i></button>
           <button class="layer-del tb-btn" data-idx="${idx}" title="删除图层"><i class="fa-solid fa-trash text-[10px] text-red-400"></i></button>
         </div>`;
-      }).join('');
+      }).join(''));
+      list.innerHTML = parts.join('');
     }
 
     // 图层操作事件委托
     $('layer-list').addEventListener('click', e => {
+      // 先检查是否点击的是 group 行
+      const groupItem = e.target.closest('[data-layer-group-id]');
+      if (groupItem) {
+        const gId = groupItem.dataset.layerGroupId;
+        const btn = e.target.closest('button');
+        const groups = (currentDSL && currentDSL.groups) || [];
+        const gidx = btn ? parseInt(btn.dataset.gidx) : -1;
+        const g = gidx >= 0 ? groups[gidx] : null;
+        if (!btn) {
+          // 点击行体选中 group
+          if (currentSVGEeditor) {
+            currentSVGEeditor.hideNodeSelection();
+            currentSVGEeditor.showGroupSelection(gId);
+          }
+          return;
+        }
+        if (!g) return;
+        if (btn.classList.contains('layer-vis')) {
+          pushHistory();
+          g.hidden = !g.hidden;
+          const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
+          renderResult(currentLayout, currentDSL);
+          if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
+        } else if (btn.classList.contains('layer-fill')) {
+          pushHistory();
+          // 切换填充色
+          const palette = ['none', '#e0f2fe', '#fef3c7', '#dcfce7', '#f3e8ff', '#fee2e2'];
+          const cur = g.fill || 'none';
+          const i = palette.indexOf(cur);
+          g.fill = palette[(i + 1) % palette.length];
+          const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
+          renderResult(currentLayout, currentDSL);
+          if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
+        } else if (btn.classList.contains('layer-del')) {
+          pushHistory();
+          groups.splice(gidx, 1);
+          const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
+          renderResult(currentLayout, currentDSL);
+          if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
+        }
+        return;
+      }
       const item = e.target.closest('[data-layer-id]');
       if (!item) return;
       const id = item.dataset.layerId;

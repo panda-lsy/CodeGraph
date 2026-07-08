@@ -263,11 +263,37 @@ export function initSVGEditor(svg, options = {}) {
       return;
     }
 
-    // group 选中（点击 group 背景矩形但非节点）：显示 group 选择框 + resize 手柄
+    // group 选中 + 拖拽（点击 group 背景矩形但非节点）
     if (!nodeId && !panMode) {
       const groupId = findGroupId(target, svgEl);
       if (groupId) {
         showGroupSelection(groupId);
+        // 启动 group 拖拽
+        const gRect = getGroupRect(groupId);
+        if (gRect) {
+          draggingGroup = {
+            id: groupId,
+            startClientX: e.clientX, startClientY: e.clientY,
+            origX: gRect.x, origY: gRect.y, origW: gRect.width, origH: gRect.height
+          };
+          // 记录 group 内所有成员节点的初始位置
+          const memberNodes = [];
+          const gEl = svgEl.querySelector(`.cg-group[data-group-id="${groupId}"]`);
+          if (gEl) {
+            // group 的成员通过 DOM 内的节点查找
+            const allNodes = svgEl.querySelectorAll('[data-node-id]');
+            allNodes.forEach(nEl => {
+              const nr = getNodeRect(nEl);
+              if (nr.x >= gRect.x - 5 && nr.y >= gRect.y - 5 &&
+                  nr.x + nr.width <= gRect.x + gRect.width + 5 &&
+                  nr.y + nr.height <= gRect.y + gRect.height + 5) {
+                memberNodes.push({ id: nEl.dataset.nodeId, el: nEl, origX: nr.x, origY: nr.y });
+              }
+            });
+          }
+          draggingGroup.members = memberNodes;
+          svgEl.style.cursor = 'grabbing';
+        }
         e.preventDefault();
         e.stopPropagation();
         return;
@@ -303,6 +329,7 @@ export function initSVGEditor(svg, options = {}) {
   let dragNodeOrigX = 0, dragNodeOrigY = 0;
   let dragNodeSize = { width: 100, height: 50 };
   let draggingWaypoint = null;
+  let draggingGroup = null; // {id, startClientX/Y, origX/Y/W/H, members:[{id,el,origX,origY}]}
 
   const onMouseMove = e => {
     if (isPanning) {
@@ -350,6 +377,46 @@ export function initSVGEditor(svg, options = {}) {
       svgEl.dispatchEvent(new CustomEvent('node-moved', { detail: { id: draggingNode.id, x: newX, y: newY } }));
       return;
     }
+    if (draggingGroup) {
+      const rect = svgEl.getBoundingClientRect();
+      const dx = (e.clientX - draggingGroup.startClientX) * (vb.w / rect.width);
+      const dy = (e.clientY - draggingGroup.startClientY) * (vb.h / rect.height);
+      const newX = draggingGroup.origX + dx;
+      const newY = draggingGroup.origY + dy;
+      // 更新 group 矩形
+      const gEl = svgEl.querySelector(`.cg-group[data-group-id="${draggingGroup.id}"]`);
+      if (gEl) {
+        const rEl = gEl.querySelector('rect');
+        if (rEl) { rEl.setAttribute('x', newX); rEl.setAttribute('y', newY); }
+        const lEl = gEl.querySelector('text');
+        if (lEl) { lEl.setAttribute('x', newX + 8); lEl.setAttribute('y', newY + 14); }
+      }
+      // 更新选择框
+      if (groupSelectionOverlay) {
+        const box = groupSelectionOverlay.querySelector('rect:not([data-ghandle])');
+        if (box) { box.setAttribute('x', newX - 2); box.setAttribute('y', newY - 2); }
+        const handleEls = groupSelectionOverlay.querySelectorAll('[data-ghandle]');
+        const positions = [
+          { x: newX - 2, y: newY - 2 },
+          { x: newX + draggingGroup.origW / 2, y: newY - 2 },
+          { x: newX + draggingGroup.origW + 2, y: newY - 2 },
+          { x: newX + draggingGroup.origW + 2, y: newY + draggingGroup.origH / 2 },
+          { x: newX + draggingGroup.origW + 2, y: newY + draggingGroup.origH + 2 },
+          { x: newX + draggingGroup.origW / 2, y: newY + draggingGroup.origH + 2 },
+          { x: newX - 2, y: newY + draggingGroup.origH + 2 },
+          { x: newX - 2, y: newY + draggingGroup.origH / 2 }
+        ];
+        handleEls.forEach((el, i) => { if (positions[i]) { el.setAttribute('x', positions[i].x - 4); el.setAttribute('y', positions[i].y - 4); } });
+      }
+      // 更新成员节点位置
+      draggingGroup.members.forEach(m => {
+        const nx = m.origX + dx, ny = m.origY + dy;
+        m.el.setAttribute('transform', buildNodeTransform(m.el, nx, ny, getNodeSize(m.el).width, getNodeSize(m.el).height));
+      });
+      // 派发 group-moved 事件
+      svgEl.dispatchEvent(new CustomEvent('group-moved', { detail: { id: draggingGroup.id, x: newX, y: newY, dx, dy, members: draggingGroup.members.map(m => ({ id: m.id, origX: m.origX, origY: m.origY })) } }));
+      return;
+    }
     if (draggingWaypoint) {
       const pos = clientToSVG(svgEl, vb, e.clientX, e.clientY);
       if (onEdgeUpdateWaypointCb) {
@@ -368,6 +435,7 @@ export function initSVGEditor(svg, options = {}) {
     if (resizing) {
       resizing = null;
       svgEl.style.cursor = '';
+      hideSnapGuides();
       // 显示对/错确认按钮（节点中心上方），等待用户确认或回滚
       if (pendingResize) {
         const cx = pendingResize.curX + pendingResize.curW / 2;
@@ -391,6 +459,11 @@ export function initSVGEditor(svg, options = {}) {
       draggingNode = null;
       svgEl.style.cursor = connectMode ? 'crosshair' : '';
       hideSnapGuides();
+    }
+    if (draggingGroup) {
+      // group 拖拽结束：group-moved 事件已实时派发，这里只需清理
+      draggingGroup = null;
+      svgEl.style.cursor = '';
     }
     if (draggingWaypoint) {
       draggingWaypoint = null;
@@ -435,6 +508,50 @@ export function initSVGEditor(svg, options = {}) {
       y: snapY !== null ? snapY : newY,
       guides
     };
+  }
+
+  // 拉伸吸附：被拖动的边缘对齐其他节点的边缘/中心
+  function findResizeSnap(nodeId, handle, newX, newY, newW, newH) {
+    const rect = svgEl.getBoundingClientRect();
+    const threshold = 8 * (vb.w / rect.width);
+    const guides = [];
+    const result = { newX: null, newRight: null, newY: null, newBottom: null, guides };
+    const newRight = newX + newW;
+    const newBottom = newY + newH;
+    const otherNodes = svgEl.querySelectorAll('[data-node-id]');
+    otherNodes.forEach(otherEl => {
+      if (otherEl.dataset.nodeId === nodeId) return;
+      const o = getNodeRect(otherEl);
+      const oCx = o.x + o.width / 2, oCy = o.y + o.height / 2;
+      const oRight = o.x + o.width, oBottom = o.y + o.height;
+      const xTargets = [o.x, oCx, oRight];
+      const yTargets = [o.y, oCy, oBottom];
+      // w 手柄：吸附左边
+      if (handle.includes('w') && result.newX == null) {
+        for (const t of xTargets) {
+          if (Math.abs(newX - t) < threshold) { result.newX = t; guides.push({ type: 'v', x: t }); break; }
+        }
+      }
+      // e 手柄：吸附右边
+      if (handle.includes('e') && result.newRight == null) {
+        for (const t of xTargets) {
+          if (Math.abs(newRight - t) < threshold) { result.newRight = t; guides.push({ type: 'v', x: t }); break; }
+        }
+      }
+      // n 手柄：吸附上边
+      if (handle.includes('n') && result.newY == null) {
+        for (const t of yTargets) {
+          if (Math.abs(newY - t) < threshold) { result.newY = t; guides.push({ type: 'h', y: t }); break; }
+        }
+      }
+      // s 手柄：吸附下边
+      if (handle.includes('s') && result.newBottom == null) {
+        for (const t of yTargets) {
+          if (Math.abs(newBottom - t) < threshold) { result.newBottom = t; guides.push({ type: 'h', y: t }); break; }
+        }
+      }
+    });
+    return result;
   }
 
   function showSnapGuides(guides) {
@@ -759,8 +876,11 @@ export function initSVGEditor(svg, options = {}) {
   }
 
   function startResize(handle, rect, e) {
-    // 先提交前一次未确认的 resize（如果有）
+    // 先提交前一次未确认的 resize（如果有），并从 DOM 重新读取节点当前尺寸
     commitPendingResize();
+    const nodeEl = svgEl.querySelector(`[data-node-id="${selectedNodeIdForResize}"]`);
+    const curRect = nodeEl ? getNodeRect(nodeEl) : rect;
+    rect = curRect;
     svgEl.dispatchEvent(new CustomEvent('node-interaction-start', { detail: { id: selectedNodeIdForResize } }));
     resizing = {
       handle,
@@ -838,6 +958,15 @@ export function initSVGEditor(svg, options = {}) {
     if (h.includes('e')) { newW = Math.max(minSize, origW + dx); }
     if (h.includes('n')) { newH = Math.max(minSize, origH - dy); newY = origY + (origH - newH); }
     if (h.includes('s')) { newH = Math.max(minSize, origH + dy); }
+    // 智能吸附：拉伸中的边缘对齐其他节点的边缘/中心
+    if (enableSnap) {
+      const snap = findResizeSnap(resizing.nodeId, h, newX, newY, newW, newH);
+      if (snap.newX != null) { const fixedRight = newX + newW; newX = snap.newX; newW = Math.max(minSize, fixedRight - newX); }
+      if (snap.newRight != null) { newW = Math.max(minSize, snap.newRight - newX); }
+      if (snap.newY != null) { const fixedBottom = newY + newH; newY = snap.newY; newH = Math.max(minSize, fixedBottom - newY); }
+      if (snap.newBottom != null) { newH = Math.max(minSize, snap.newBottom - newY); }
+      showSnapGuides(snap.guides || []);
+    }
     // 通过回调重新渲染节点内容（支持所有形状）
     if (onNodeResizeCb) {
       onNodeResizeCb(resizing.nodeId, newX, newY, newW, newH);
