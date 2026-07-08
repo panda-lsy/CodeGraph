@@ -182,13 +182,73 @@
     #render-errors .err-item code { background: rgba(0,0,0,0.08); padding: 0 3px; border-radius: 2px; }
     #render-errors .err-close { cursor: pointer; flex-shrink: 0; opacity: 0.6; }
     #render-errors .err-close:hover { opacity: 1; }
+
+    /* ===== 移动端窄屏适配 ===== */
+    /* 抽屉遮罩 */
+    #drawer-overlay {
+      display: none; position: fixed; inset: 0; z-index: 30;
+      background: rgba(0,0,0,0.4); opacity: 0; transition: opacity 0.2s;
+    }
+    #drawer-overlay.active { display: block; opacity: 1; }
+    /* 移动端菜单按钮（默认隐藏，窄屏显示） */
+    #mobile-menu-btn { display: none; }
+
+    @media (max-width: 768px) {
+      /* 顶栏：隐藏次要元素，显示菜单按钮 */
+      #mobile-menu-btn { display: flex; }
+      .cg-hide-mobile { display: none !important; }
+      header > div { padding: 0.75rem 1rem; }
+      header h1 { font-size: 0.95rem; }
+      header p { display: none; }
+
+      /* 主体：去掉水平 padding 和 gap */
+      main { padding: 0.5rem; gap: 0.5rem; flex-direction: column; }
+      /* 左侧 aside：改为从左滑入的抽屉 */
+      aside {
+        position: fixed; left: 0; top: 0; bottom: 0; z-index: 40;
+        width: 85vw; max-width: 340px;
+        transform: translateX(-100%); transition: transform 0.25s ease;
+        background: #f8fafc; box-shadow: 2px 0 12px rgba(0,0,0,0.15);
+        padding-top: 1rem;
+      }
+      .dark aside { background: #0f172a; }
+      aside.drawer-open { transform: translateX(0); }
+      /* 右侧 section：占满宽度 */
+      section { width: 100%; }
+
+      /* 工具栏：允许横向滚动，按钮不换行 */
+      .toolbar-row { overflow-x: auto; flex-wrap: nowrap !important; -webkit-overflow-scrolling: touch; }
+      .toolbar-row::-webkit-scrollbar { display: none; }
+      .toolbar-row > * { flex-shrink: 0; }
+
+      /* 画布最小高度保证 */
+      #canvas { min-height: 50vh; }
+
+      /* 底部状态栏：精简 */
+      .cg-statusbar span { display: none; }
+      .cg-statusbar span:first-child { display: inline; }
+
+      /* DSL 面板：移动端全宽 */
+      #dsl-panel { max-height: 40vh; }
+      #dsl-output { max-height: 30vh; font-size: 10px; }
+
+      /* 文字/线段工具栏：允许横向滚动 */
+      .cg-text-toolbar, .cg-edge-toolbar { flex-wrap: nowrap; overflow-x: auto; }
+    }
   </style>
 </head>
 <body class="bg-slate-50 dark:bg-slate-950 h-screen overflow-hidden text-slate-800 dark:text-slate-200 transition-colors flex flex-col">
+  <!-- 抽屉遮罩（移动端） -->
+  <div id="drawer-overlay"></div>
+
   <!-- 顶栏 -->
   <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
     <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
       <div class="flex items-center gap-3">
+        <!-- 移动端菜单按钮 -->
+        <button id="mobile-menu-btn" class="w-9 h-9 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition items-center justify-center" title="打开控制面板">
+          <i class="fa-solid fa-bars"></i>
+        </button>
         <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
           <i class="fa-solid fa-diagram-project text-white"></i>
         </div>
@@ -199,7 +259,7 @@
       </div>
       <div class="flex items-center gap-3">
         <!-- 当前工作区 -->
-        <a href="workspace.html" class="text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-1.5" title="切换 / 管理工作区">
+        <a href="workspace.html" class="cg-hide-mobile text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center gap-1.5" title="切换 / 管理工作区">
           <i class="fa-solid fa-folder-tree text-primary"></i>
           <span id="current-ws" class="font-medium">默认工作区</span>
           <i class="fa-solid fa-chevron-down text-[10px] opacity-60"></i>
@@ -209,7 +269,7 @@
           <i class="fa-solid fa-moon text-slate-600 dark:hidden"></i>
           <i class="fa-solid fa-sun text-amber-400 hidden dark:inline"></i>
         </button>
-        <a href="../index.html" class="text-sm text-slate-500 dark:text-slate-400 hover:text-primary transition">
+        <a href="../index.html" class="cg-hide-mobile text-sm text-slate-500 dark:text-slate-400 hover:text-primary transition">
           <i class="fa-solid fa-arrow-left mr-1"></i>返回展示页
         </a>
       </div>
@@ -218,7 +278,7 @@
 
   <main class="max-w-[1800px] mx-auto px-4 py-4 flex gap-4 flex-1 min-h-0">
     <!-- 左侧：导航栏式控制面板 -->
-    <aside class="w-80 flex-shrink-0 flex flex-col gap-3 overflow-y-auto pr-1 cg-scroll">
+    <aside id="control-panel" class="w-80 flex-shrink-0 flex flex-col gap-3 overflow-y-auto pr-1 cg-scroll">
       <!-- 导航分组：生成图形 -->
       <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex-shrink-0">
         <div class="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
@@ -399,7 +459,7 @@
     <section class="flex-1 flex flex-col min-w-0">
       <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
         <div class="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
-          <div class="flex items-center gap-2 flex-wrap">
+          <div class="toolbar-row flex items-center gap-2 flex-wrap">
             <h2 class="text-sm font-semibold">渲染结果</h2>
             <select id="theme-quick" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 dark:bg-slate-800">
               <option value="Nature">Nature</option>
@@ -461,7 +521,7 @@
               <i class="fa-solid fa-sun"></i>
             </button>
           </div>
-          <div class="flex gap-2 flex-wrap">
+          <div class="toolbar-row flex gap-2 flex-wrap">
             <button id="save-proj" class="text-xs px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50" disabled>
               <i class="fa-solid fa-floppy-disk mr-1"></i>保存
             </button>
@@ -529,7 +589,7 @@
           <i class="fa-solid fa-xmark err-close" id="render-errors-close" title="关闭"></i>
         </div>
         <!-- 编辑工具栏（默认显示） -->
-        <div class="px-4 py-2 border-t border-slate-200 dark:border-slate-800 flex flex-wrap gap-2 items-center text-xs text-slate-500 dark:text-slate-400">
+        <div class="cg-statusbar px-4 py-2 border-t border-slate-200 dark:border-slate-800 flex flex-wrap gap-2 items-center text-xs text-slate-500 dark:text-slate-400">
           <span><i class="fa-solid fa-hand-pointer mr-1"></i>拖拽节点</span>
           <span class="opacity-40">·</span>
           <span><i class="fa-solid fa-vector-square mr-1"></i>Shift+点击/框选多选</span>
@@ -628,6 +688,24 @@
       applyDarkMode(!CONFIG.style.darkMode);
       refreshPreview();
     });
+
+    // 移动端抽屉控制
+    const drawer = $('control-panel');
+    const overlay = $('drawer-overlay');
+    function toggleDrawer(open) {
+      if (open) {
+        drawer.classList.add('drawer-open');
+        overlay.classList.add('active');
+      } else {
+        drawer.classList.remove('drawer-open');
+        overlay.classList.remove('active');
+      }
+    }
+    $('mobile-menu-btn').addEventListener('click', () => toggleDrawer(true));
+    overlay.addEventListener('click', () => toggleDrawer(false));
+    // 抽屉内点击生成按钮后自动关闭
+    const genBtn = document.getElementById('generate-btn');
+    if (genBtn) genBtn.addEventListener('click', () => { if (window.innerWidth <= 768) toggleDrawer(false); });
 
     // LLM 状态显示（隐藏端点地址，仅显示模型和状态）
     function updateLLMMode() {

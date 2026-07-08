@@ -5,7 +5,7 @@
 ## 快速上手
 
 ```bash
-git clone https://github.com/<your-fork>/CodeGraph.git
+git clone https://github.com/panda-lsy/CodeGraph.git
 cd CodeGraph
 python -m http.server 8000   # 或 npx serve .
 # 浏览器打开 http://localhost:8000/demo/
