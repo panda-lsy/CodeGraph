@@ -157,6 +157,7 @@ export function initSVGEditor(svg, options = {}) {
  const onNodeResizeCb = options.onNodeResize || null;
   const onGroupTextEditCb = options.onGroupTextEdit || null;
   const onGroupResizeCb = options.onGroupResize || null;
+  const onGroupSelectCb = options.onGroupSelect || null;
   let enableSnap = options.enableSnap !== false;
   let panMode = false; // 手型平移模式：点击节点也平移而非拖拽
 
@@ -456,6 +457,12 @@ export function initSVGEditor(svg, options = {}) {
     if (groupResizing) {
       groupResizing = null;
       svgEl.style.cursor = '';
+      // 显示对/错确认按钮（group 上方中心）
+      if (pendingGroupResize) {
+        const cx = pendingGroupResize.curX + pendingGroupResize.curW / 2;
+        const cy = pendingGroupResize.curY;
+        showGroupConfirmButtons(cx, cy);
+      }
     }
     if (rotating) {
       rotating = null;
@@ -755,6 +762,7 @@ export function initSVGEditor(svg, options = {}) {
     const rect = getGroupRect(groupId);
     if (!rect) return;
     selectedGroupId = groupId;
+    if (onGroupSelectCb) onGroupSelectCb(groupId);
     groupSelectionOverlay = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     groupSelectionOverlay.setAttribute('class', 'cg-group-selection');
     groupSelectionOverlay.style.pointerEvents = 'auto';
@@ -812,13 +820,19 @@ export function initSVGEditor(svg, options = {}) {
   }
 
   function startGroupResize(handle, rect, e) {
+    // 先提交前一次未确认的 group resize（如果有）
+    commitPendingGroupResize();
+    // 从 DOM 重新读取 group 当前尺寸
+    const curRect = getGroupRect(selectedGroupId) || rect;
+    rect = curRect;
     svgEl.dispatchEvent(new CustomEvent('node-interaction-start', { detail: { id: selectedGroupId } }));
     groupResizing = {
       handle,
       startClientX: e.clientX, startClientY: e.clientY,
       origX: rect.x, origY: rect.y,
       origW: rect.width, origH: rect.height,
-      groupId: selectedGroupId
+      groupId: selectedGroupId,
+      initX: rect.x, initY: rect.y, initW: rect.width, initH: rect.height
     };
     svgEl.style.cursor = 'grabbing';
   }
@@ -836,7 +850,7 @@ export function initSVGEditor(svg, options = {}) {
     if (h.includes('e')) { newW = Math.max(minSize, origW + dx); }
     if (h.includes('n')) { newH = Math.max(minSize, origH - dy); newY = origY + (origH - newH); }
     if (h.includes('s')) { newH = Math.max(minSize, origH + dy); }
-    // 更新 SVG 中的 group 矩形
+    // 更新 SVG 中的 group 矩形（不立即派发事件，等用户确认）
     const gEl = findGroupElById(svgEl, groupResizing.groupId);
     if (gEl) {
       const rectEl = gEl.querySelector('rect');
@@ -880,9 +894,81 @@ export function initSVGEditor(svg, options = {}) {
         }
       });
     }
-    // 派发 group-resized 事件（供 demo 同步数据）
-    svgEl.dispatchEvent(new CustomEvent('group-resized', { detail: { id: groupResizing.groupId, x: newX, y: newY, width: newW, height: newH } }));
-    if (onGroupResizeCb) onGroupResizeCb(groupResizing.groupId, newX, newY, newW, newH);
+    // 记录 pending 状态（不立即派发事件）
+    pendingGroupResize = {
+      groupId: groupResizing.groupId,
+      curX: newX, curY: newY, curW: newW, curH: newH,
+      initX: groupResizing.initX, initY: groupResizing.initY, initW: groupResizing.initW, initH: groupResizing.initH
+    };
+  }
+
+  // pending group resize 状态
+  let pendingGroupResize = null;
+  let groupConfirmButtons = null;
+
+  function commitPendingGroupResize() {
+    if (!pendingGroupResize) return;
+    const { groupId, curX, curY, curW, curH } = pendingGroupResize;
+    svgEl.dispatchEvent(new CustomEvent('group-resized', { detail: { id: groupId, x: curX, y: curY, width: curW, height: curH } }));
+    if (onGroupResizeCb) onGroupResizeCb(groupId, curX, curY, curW, curH);
+    pendingGroupResize = null;
+    removeGroupConfirmButtons();
+  }
+
+  function rollbackPendingGroupResize() {
+    if (!pendingGroupResize) return;
+    const { groupId, initX, initY, initW, initH } = pendingGroupResize;
+    const gEl = findGroupElById(svgEl, groupId);
+    if (gEl) {
+      const rectEl = gEl.querySelector('rect');
+      if (rectEl) {
+        rectEl.setAttribute('x', initX);
+        rectEl.setAttribute('y', initY);
+        rectEl.setAttribute('width', initW);
+        rectEl.setAttribute('height', initH);
+      }
+      const labelEl = gEl.querySelector('text');
+      if (labelEl) {
+        labelEl.setAttribute('x', initX + 8);
+        labelEl.setAttribute('y', initY + 14);
+      }
+    }
+    pendingGroupResize = null;
+    removeGroupConfirmButtons();
+    if (groupSelectionOverlay) hideGroupSelection();
+  }
+
+  function removeGroupConfirmButtons() {
+    if (groupConfirmButtons) { groupConfirmButtons.remove(); groupConfirmButtons = null; }
+  }
+
+  function showGroupConfirmButtons(cx, cy) {
+    removeGroupConfirmButtons();
+    if (!groupSelectionOverlay) return;
+    groupConfirmButtons = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    groupConfirmButtons.setAttribute('class', 'cg-group-confirm-btns');
+    groupConfirmButtons.style.pointerEvents = 'auto';
+    const okBtn = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    okBtn.setAttribute('cx', cx + 14); okBtn.setAttribute('cy', cy - 14); okBtn.setAttribute('r', 9);
+    okBtn.setAttribute('fill', '#22c55e'); okBtn.setAttribute('stroke', '#fff'); okBtn.setAttribute('stroke-width', '1.5');
+    okBtn.style.cursor = 'pointer';
+    const okText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    okText.setAttribute('x', cx + 14); okText.setAttribute('y', cy - 10);
+    okText.setAttribute('text-anchor', 'middle'); okText.setAttribute('font-size', '12'); okText.setAttribute('fill', '#fff');
+    okText.textContent = '✓';
+    okBtn.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); commitPendingGroupResize(); });
+    const cancelBtn = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    cancelBtn.setAttribute('cx', cx - 14); cancelBtn.setAttribute('cy', cy - 14); cancelBtn.setAttribute('r', 9);
+    cancelBtn.setAttribute('fill', '#ef4444'); cancelBtn.setAttribute('stroke', '#fff'); cancelBtn.setAttribute('stroke-width', '1.5');
+    cancelBtn.style.cursor = 'pointer';
+    const cancelText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    cancelText.setAttribute('x', cx - 14); cancelText.setAttribute('y', cy - 10);
+    cancelText.setAttribute('text-anchor', 'middle'); cancelText.setAttribute('font-size', '12'); cancelText.setAttribute('fill', '#fff');
+    cancelText.textContent = '✕';
+    cancelBtn.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); rollbackPendingGroupResize(); });
+    groupConfirmButtons.appendChild(okBtn); groupConfirmButtons.appendChild(okText);
+    groupConfirmButtons.appendChild(cancelBtn); groupConfirmButtons.appendChild(cancelText);
+    groupSelectionOverlay.appendChild(groupConfirmButtons);
   }
 
   function startResize(handle, rect, e) {
@@ -1179,6 +1265,7 @@ export function initSVGEditor(svg, options = {}) {
     input.type = 'text';
     input.value = oldText;
     input.style.cssText = `width:100%;height:100%;border:2px solid #06b6d4;border-radius:4px;font-size:11px;background:#fff;color:#000;outline:none;padding:0 4px;box-sizing:border-box;`;
+    input.addEventListener('mousedown', ev => ev.stopPropagation());
     fo.appendChild(input);
     gEl.appendChild(fo);
     input.focus();
@@ -1231,6 +1318,8 @@ export function initSVGEditor(svg, options = {}) {
     const input = document.createElement('textarea');
     input.value = oldText;
     input.style.cssText = `width:100%;height:100%;border:2px solid #6366f1;border-radius:4px;text-align:center;font-size:14px;background:#fff;color:#000;outline:none;resize:none;padding:4px;box-sizing:border-box;line-height:1.3;`;
+    // 阻止 mousedown 冒泡到 svgEl/demo，避免干扰光标定位
+    input.addEventListener('mousedown', ev => ev.stopPropagation());
     fo.appendChild(input);
     nodeEl.appendChild(fo);
     input.focus();

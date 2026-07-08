@@ -215,13 +215,19 @@ function renderGroups(layout, dsl, theme) {
     const fill = g.fill || 'none';
     const stroke = g.stroke || theme.groupStroke;
     const labelColor = g.labelColor || stroke;
+    // label 对齐：left（默认）/center/right
+    const labelAlign = g.labelAlign || 'left';
+    let labelX = minX + 8;
+    if (labelAlign === 'center') labelX = minX + (maxX - minX) / 2;
+    else if (labelAlign === 'right') labelX = maxX - 8;
+    const textAnchor = labelAlign === 'center' ? 'middle' : (labelAlign === 'right' ? 'end' : 'start');
     return `
   <g class="cg-group" data-group-id="${escapeXML(g.id || 'group-' + i)}" data-group-label="${escapeXML(g.label || '')}">
     <rect x="${minX}" y="${minY}" width="${maxX - minX}" height="${maxY - minY}"
           rx="8" ry="8" fill="${fill}" stroke="${stroke}" stroke-width="1"
           stroke-dasharray="4 3" opacity="${fill !== 'none' ? '0.8' : '0.5'}" class="cg-group-rect"/>
-    <text x="${minX + 8}" y="${minY + 14}" font-family="${theme.fontFamily}"
-          font-size="11" fill="${labelColor}" class="cg-group-label">${escapeXML(g.label || '')}</text>
+    <text x="${labelX}" y="${minY + 14}" font-family="${theme.fontFamily}"
+          font-size="11" fill="${labelColor}" text-anchor="${textAnchor}" class="cg-group-label">${escapeXML(g.label || '')}</text>
   </g>`;
   }).join('');
 }

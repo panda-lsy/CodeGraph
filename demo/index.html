@@ -449,6 +449,10 @@
           <button class="tb-btn" id="tb-italic" title="斜体"><i class="fa-solid fa-italic"></i></button>
           <button class="tb-btn" id="tb-br" title="插入换行 (Shift+空格)"><i class="fa-solid fa-return"></i></button>
           <div class="tb-sep"></div>
+          <button class="tb-btn" id="tb-align-left" title="左对齐"><i class="fa-solid fa-align-left"></i></button>
+          <button class="tb-btn" id="tb-align-center" title="居中对齐"><i class="fa-solid fa-align-center"></i></button>
+          <button class="tb-btn" id="tb-align-right" title="右对齐"><i class="fa-solid fa-align-right"></i></button>
+          <div class="tb-sep"></div>
           <button class="tb-btn" id="tb-edit" title="多行文本编辑"><i class="fa-solid fa-pen-to-square"></i></button>
           <div class="tb-sep"></div>
           <div class="tb-palette" id="tb-palette"></div>
@@ -487,6 +491,9 @@
           </button>
           <button id="edge-line" class="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50" disabled title="切换为直线">
             <i class="fa-solid fa-minus mr-1"></i>直线
+          </button>
+          <button id="edge-add-waypoint" class="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50" disabled title="添加拐点（在边中点插入）">
+            <i class="fa-solid fa-circle-plus mr-1"></i>拐点
           </button>
           <button id="edge-delete" class="px-2.5 py-1 rounded border border-red-300 dark:border-red-800 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition disabled:opacity-50" disabled title="删除选中的边">
             <i class="fa-solid fa-trash mr-1"></i>删除边
@@ -982,6 +989,7 @@
         selectedEdgeIdx = null;
         $('edge-curve').disabled = true;
         $('edge-line').disabled = true;
+        $('edge-add-waypoint').disabled = true;
         $('edge-delete').disabled = true;
         if (currentSVGEeditor) currentSVGEeditor.clearWaypoints();
         return;
@@ -989,6 +997,7 @@
       selectedEdgeIdx = parseInt(edgeId);
       $('edge-curve').disabled = false;
       $('edge-line').disabled = false;
+      $('edge-add-waypoint').disabled = false;
       $('edge-delete').disabled = false;
       refreshWaypoints();
     }
@@ -1218,6 +1227,35 @@
         });
       }
     }
+    // group 选中回调：唤出字体工具栏供标题样式编辑
+    let selectedGroupId = null;
+    function onGroupSelect(groupId) {
+      selectedGroupId = groupId;
+      selectedNodeId = null;
+      showTextToolbarForGroup(groupId);
+    }
+    // 显示工具栏并同步 group 标题样式
+    function showTextToolbarForGroup(groupId) {
+      initTextToolbar();
+      const tb = $('text-toolbar');
+      if (!groupId || !currentDSL?.groups) { tb.classList.remove('active'); return; }
+      const g = currentDSL.groups.find(x => x.id === groupId);
+      if (!g) { tb.classList.remove('active'); return; }
+      tb.classList.add('active');
+      const align = g.labelAlign || 'left';
+      $('tb-align-left').classList.toggle('active', align === 'left');
+      $('tb-align-center').classList.toggle('active', align === 'center');
+      $('tb-align-right').classList.toggle('active', align === 'right');
+      // 字体/字号/颜色/粗体/斜体按钮对 group 不适用，隐藏
+      $('tb-font-family').style.display = 'none';
+      $('tb-font-size').style.display = 'none';
+      $('tb-bold').style.display = 'none';
+      $('tb-italic').style.display = 'none';
+      $('tb-br').style.display = 'none';
+      $('tb-palette').style.display = 'none';
+      $('tb-color').style.display = 'none';
+      $('tb-edit').style.display = 'none';
+    }
 
     // 节点文本编辑后回调：更新 DSL + layout + AST
     function onNodeTextEdit(nodeId, newText) {
@@ -1330,6 +1368,20 @@
           }
         });
       });
+      // group 标题对齐按钮
+      ['left', 'center', 'right'].forEach(align => {
+        $('tb-align-' + align).addEventListener('click', () => {
+          if (!selectedGroupId || !currentDSL?.groups) return;
+          pushHistory();
+          const g = currentDSL.groups.find(x => x.id === selectedGroupId);
+          if (!g) return;
+          g.labelAlign = align;
+          const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
+          renderResult(currentLayout, currentDSL);
+          if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
+          if (currentSVGEeditor) currentSVGEeditor.showGroupSelection(selectedGroupId);
+        });
+      });
       // 阻止工具栏上的 mousedown 冒泡到 canvas（避免取消选中）
       $('text-toolbar').addEventListener('mousedown', e => e.stopPropagation());
     }
@@ -1342,6 +1394,19 @@
       const node = (currentLayout.nodes || []).find(n => n.id === nodeId);
       if (!node) { tb.classList.remove('active'); return; }
       tb.classList.add('active');
+      // 恢复节点编辑时的所有按钮显示
+      $('tb-font-family').style.display = '';
+      $('tb-font-size').style.display = '';
+      $('tb-bold').style.display = '';
+      $('tb-italic').style.display = '';
+      $('tb-br').style.display = '';
+      $('tb-palette').style.display = '';
+      $('tb-color').style.display = '';
+      $('tb-edit').style.display = '';
+      // 节点不支持标题对齐，清除对齐按钮高亮
+      $('tb-align-left').classList.remove('active');
+      $('tb-align-center').classList.remove('active');
+      $('tb-align-right').classList.remove('active');
       // 同步工具栏状态
       const ts = node.textStyle || {};
       $('tb-font-family').value = ts.fontFamily || 'inherit';
@@ -1452,6 +1517,7 @@
           onNodeResize: onNodeResize,
           onGroupTextEdit: onGroupTextEdit,
           onGroupResize: onGroupResize,
+          onGroupSelect: onGroupSelect,
           enableSnap: snapEnabled
         });
         // 节点点击选中（支持 Shift/Ctrl 多选 + 框选）
@@ -1492,6 +1558,8 @@
             $('tool-delete').disabled = false;
             updateClipboardButtons();
             showTextToolbar(selectedNodeIds.size === 1 ? foundId : null);
+            // 选中节点时清除 group 选中状态
+            selectedGroupId = null;
             // 单选时显示选择框手柄；多选时只显示高亮框
             if (selectedNodeIds.size === 1 && currentSVGEeditor) {
               currentSVGEeditor.showNodeSelection(foundId);
@@ -1503,6 +1571,7 @@
             // 空白处单击：清除选中 + 启动框选
             selectedNodeIds.clear();
             selectedNodeId = null;
+            selectedGroupId = null;
             $('tool-delete').disabled = true;
             updateClipboardButtons();
             showTextToolbar(null);
@@ -1938,6 +2007,8 @@
       }
       refreshWaypoints();
       $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
+      // 同步导出用 SVG
+      $('export-btn').dataset.svg = layoutToSVG(currentLayout, currentDSL, { darkMode: CONFIG.style.darkMode, width: CONFIG.style.canvasWidth || null, height: CONFIG.style.canvasHeight || null });
       showStatus('ok', '<i class="fa-solid fa-bezier-curve mr-1"></i>已切换为曲线');
     });
 
@@ -1962,7 +2033,45 @@
       }
       refreshWaypoints();
       $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
+      // 同步导出用 SVG
+      $('export-btn').dataset.svg = layoutToSVG(currentLayout, currentDSL, { darkMode: CONFIG.style.darkMode, width: CONFIG.style.canvasWidth || null, height: CONFIG.style.canvasHeight || null });
       showStatus('ok', '<i class="fa-solid fa-minus mr-1"></i>已切换为直线');
+    });
+
+    // 边编辑：添加拐点（在边中点插入）
+    $('edge-add-waypoint').addEventListener('click', () => {
+      if (selectedEdgeIdx === null || !currentLayout) return;
+      const edge = currentLayout.edges[selectedEdgeIdx];
+      if (!edge) return;
+      const fromNode = (currentLayout.nodes || []).find(n => n.id === edge.from);
+      const toNode = (currentLayout.nodes || []).find(n => n.id === edge.to);
+      if (!fromNode || !toNode) return;
+      pushHistory();
+      // 在两节点中心之间插入一个拐点
+      const midX = (fromNode.x + fromNode.width / 2 + toNode.x + toNode.width / 2) / 2;
+      const midY = (fromNode.y + fromNode.height / 2 + toNode.y + toNode.height / 2) / 2;
+      edge.points = edge.points || [];
+      if (edge.points.length < 2) {
+        edge.points = [{ x: fromNode.x + fromNode.width / 2, y: fromNode.y + fromNode.height / 2 }, { x: toNode.x + toNode.width / 2, y: toNode.y + toNode.height / 2 }];
+      }
+      edge.points.splice(edge.points.length - 1, 0, { x: midX, y: midY });
+      edge.style = 'line'; // 有拐点时用折线
+      if (currentDSL) {
+        const dslEdge = (currentDSL.edges || [])[selectedEdgeIdx];
+        if (dslEdge) dslEdge.style = 'line';
+      }
+      const svg = $('canvas').querySelector('svg');
+      if (svg) {
+        const edgeEls = svg.querySelectorAll('.cg-edge path');
+        if (edgeEls[selectedEdgeIdx]) {
+          const newPath = recalcEdgePath(currentLayout, edge);
+          if (newPath) edgeEls[selectedEdgeIdx].setAttribute('d', newPath);
+        }
+      }
+      refreshWaypoints();
+      $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
+      $('export-btn').dataset.svg = layoutToSVG(currentLayout, currentDSL, { darkMode: CONFIG.style.darkMode, width: CONFIG.style.canvasWidth || null, height: CONFIG.style.canvasHeight || null });
+      showStatus('ok', '<i class="fa-solid fa-circle-plus mr-1"></i>已添加拐点（可拖拽移动）');
     });
 
     // 边编辑：删除选中的边
@@ -1993,6 +2102,7 @@
       selectedEdgeIdx = null;
       $('edge-curve').disabled = true;
       $('edge-line').disabled = true;
+      $('edge-add-waypoint').disabled = true;
       $('edge-delete').disabled = true;
       if (currentSVGEeditor) {
         currentSVGEeditor.clearWaypoints();
