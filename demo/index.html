@@ -250,7 +250,12 @@
             </summary>
             <div class="p-3 space-y-2 bg-slate-50 dark:bg-slate-900/50">
               <div>
-                <label class="block text-[10px] font-semibold text-slate-500 mb-1">主题样式</label>
+                <label class="block text-[10px] font-semibold text-slate-500 mb-1 flex items-center justify-between">
+                  <span>主题样式</span>
+                  <a href="../CONTRIBUTING.md" target="_blank" class="text-[9px] text-primary hover:underline flex items-center gap-0.5" title="贡献新主题">
+                    <i class="fa-solid fa-plus text-[8px]"></i>贡献主题
+                  </a>
+                </label>
                 <select id="theme" class="w-full px-2 py-1 text-xs border border-slate-300 dark:border-slate-700 dark:bg-slate-800 rounded">
                   <option value="Nature">Nature（论文风）</option>
                   <option value="Science">Science（学术风）</option>
@@ -296,8 +301,18 @@
           <details class="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
             <summary class="text-xs font-medium text-slate-600 dark:text-slate-400 px-3 py-1.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1 select-none">
               <i class="fa-solid fa-shapes"></i>组件库<span class="opacity-50 font-normal">（拖到画布）</span>
+              <a href="../CONTRIBUTING.md" target="_blank" class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-primary/10 text-primary hover:bg-primary/20 transition-colors" onclick="event.stopPropagation()" title="贡献新组件、主题或示例">
+                <i class="fa-solid fa-code-branch"></i>贡献
+              </a>
             </summary>
             <div class="p-2 bg-slate-50 dark:bg-slate-900/50">
+              <!-- 贡献提示条 -->
+              <div class="mb-2 px-2 py-1.5 rounded text-[10px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/50 flex items-center gap-1.5">
+                <i class="fa-solid fa-lightbulb text-amber-400"></i>
+                <span>缺少你需要的组件？参考</span>
+                <a href="../src/components-contrib/template.js" target="_blank" class="text-primary underline">贡献模板</a>
+                <span>提交 PR</span>
+              </div>
               <div id="comp-grid" class="space-y-2"></div>
             </div>
           </details>

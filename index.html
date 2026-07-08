@@ -243,6 +243,9 @@
                     <a href="#features" class="text-gray-300 hover:text-white transition-colors text-sm">核心功能</a>
                     <a href="#demo" class="text-gray-300 hover:text-white transition-colors text-sm">交互演示</a>
                     <a href="#tech" class="text-gray-300 hover:text-white transition-colors text-sm">技术架构</a>
+                    <a href="#contribute" class="text-primary hover:text-primary/80 transition-colors text-sm font-medium flex items-center gap-1">
+                        <i class="fas fa-code-branch text-xs"></i> 贡献
+                    </a>
                 </div>
                 <div class="flex items-center space-x-4">
                     <span class="tag bg-primary/20 text-primary border border-primary/30">
@@ -594,6 +597,97 @@
                         </span>
                     </div>
                 </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Community Contribution Section -->
+    <section id="contribute" class="py-24 relative bg-gradient-to-b from-transparent via-primary/5 to-transparent">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12 scroll-reveal">
+                <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass-card border border-primary/30 mb-4">
+                    <span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+                    <span class="text-sm text-primary font-medium">开源贡献</span>
+                </div>
+                <h2 class="text-4xl md:text-5xl font-bold mb-4">加入<span class="gradient-text">社区共建</span></h2>
+                <p class="text-gray-400 text-lg">贡献图形组件 · 主题样式 · DSL 示例，让 CodeGraph 更强大</p>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-6 mb-10">
+                <!-- 组件贡献 -->
+                <div class="glass-card rounded-2xl p-6 scroll-reveal feature-card text-center">
+                    <div class="feature-icon w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-shapes text-primary text-2xl"></i>
+                    </div>
+                    <h3 class="font-bold text-lg mb-2">🧩 图形组件</h3>
+                    <p class="text-gray-400 text-sm mb-4">新增矢量形状、IT 图标、化学仪器等组件，丰富绘图元素库</p>
+                    <div class="text-xs text-gray-500 space-y-1">
+                        <div>纯函数 <code class="text-primary">(w,h,text,theme) → SVG</code></div>
+                        <div>支持 Markdown/TeX 文本</div>
+                    </div>
+                </div>
+
+                <!-- 主题贡献 -->
+                <div class="glass-card rounded-2xl p-6 scroll-reveal feature-card text-center">
+                    <div class="feature-icon w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-palette text-secondary text-2xl"></i>
+                    </div>
+                    <h3 class="font-bold text-lg mb-2">🎨 主题样式</h3>
+                    <p class="text-gray-400 text-sm mb-4">贡献配色方案（日间/夜间双套），打造个性化视觉风格</p>
+                    <div class="text-xs text-gray-500 space-y-1">
+                        <div>完整 Token：fill / stroke / edge 等</div>
+                        <div>命名有辨识度：Cyberpunk / Forest</div>
+                    </div>
+                </div>
+
+                <!-- DSL 示例贡献 -->
+                <div class="glass-card rounded-2xl p-6 scroll-reveal feature-card text-center">
+                    <div class="feature-icon w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-code text-accent text-2xl"></i>
+                    </div>
+                    <h3 class="font-bold text-lg mb-2">📐 DSL 示例</h3>
+                    <p class="text-gray-400 text-sm mb-4">贡献教学模板、架构图、流程图示例，展示绘图能力</p>
+                    <div class="text-xs text-gray-500 space-y-1">
+                        <div>Mermaid 语法 / DSL JSON</div>
+                        <div>支持 subgraph / 虚线 / 标签</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 贡献流程 -->
+            <div class="glass-card rounded-2xl p-8 scroll-reveal">
+                <h3 class="text-xl font-bold mb-6 text-center">贡献流程</h3>
+                <div class="grid md:grid-cols-4 gap-4 text-center text-sm">
+                    <div class="space-y-2">
+                        <div class="w-10 h-10 rounded-full gradient-bg flex items-center justify-center mx-auto font-bold text-white">1</div>
+                        <div class="font-medium">Fork 仓库</div>
+                        <div class="text-gray-500 text-xs">GitHub Fork CodeGraph</div>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="w-10 h-10 rounded-full gradient-bg flex items-center justify-center mx-auto font-bold text-white">2</div>
+                        <div class="font-medium">复制模板</div>
+                        <div class="text-gray-500 text-xs">参考 <code class="text-primary">components-contrib/template.js</code></div>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="w-10 h-10 rounded-full gradient-bg flex items-center justify-center mx-auto font-bold text-white">3</div>
+                        <div class="font-medium">实现代码</div>
+                        <div class="text-gray-500 text-xs">遵循 <a href="CONTRIBUTING.md" class="text-primary underline">贡献指南</a></div>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="w-10 h-10 rounded-full gradient-bg flex items-center justify-center mx-auto font-bold text-white">4</div>
+                        <div class="font-medium">提交 PR</div>
+                        <div class="text-gray-500 text-xs">填写 PR 模板，等待 Review</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+                <a href="CONTRIBUTING.md" class="px-6 py-3 gradient-bg rounded-xl font-semibold text-white hover:opacity-90 transition-all flex items-center">
+                    <i class="fas fa-book mr-2"></i> 查看贡献指南
+                </a>
+                <a href="https://github.com/your-org/CodeGraph/fork" class="px-6 py-3 glass-card rounded-xl font-semibold text-white hover:bg-white/10 transition-all flex items-center border border-white/10 landing-btn-light">
+                    <i class="fab fa-github mr-2"></i> Fork 仓库
+                </a>
             </div>
         </div>
     </section>
