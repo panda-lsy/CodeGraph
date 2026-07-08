@@ -174,6 +174,9 @@ export function mermaidToDSL(code) {
     // 圆柱 [( "text" )]
     let m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\[\(\s*"((?:[^"\\]|\\.)*)"\s*\)\]$/);
     if (m) return { id: m[1], text: m[2], component: 'cylinder' };
+    // 圆柱变体 (["text"]) —— 括号顺序与标准相反，Mermaid 亦兼容
+    m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\(\[\s*"((?:[^"\\]|\\.)*)"\s*\]\)$/);
+    if (m) return { id: m[1], text: m[2], component: 'cylinder' };
     // 双圆 (( "text" ))
     m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\(\(\s*"((?:[^"\\]|\\.)*)"\s*\)\)$/);
     if (m) return { id: m[1], text: m[2], component: 'circle' };
@@ -198,6 +201,9 @@ export function mermaidToDSL(code) {
     // 无引号版本
     m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\[\(\s*([^\)]+)\s*\)\]$/);
     if (m) return { id: m[1], text: m[2], component: 'cylinder' };
+    // 圆柱变体无引号 (["text"])
+    m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\(\[\s*([^\]]+)\s*\]\)$/);
+    if (m) return { id: m[1], text: m[2], component: 'cylinder' };
     m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\(\(\s*([^\)]+)\s*\)\)$/);
     if (m) return { id: m[1], text: m[2], component: 'circle' };
     m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\{\{\s*([^\}]+)\s*\}\}$/);
@@ -208,9 +214,9 @@ export function mermaidToDSL(code) {
     if (m) return { id: m[1], text: m[2], component: 'rounded' };
     m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)\[\s*([^\]]+)\s*\]$/);
     if (m) return { id: m[1], text: m[2], component: 'rect' };
-    // 纯 id（无形状）
+    // 纯 id（无形状）—— 不返回 text/component，避免覆盖已有节点定义
     m = token.match(/^([A-Za-z0-9_\u4e00-\u9fa5]+)$/);
-    if (m) return { id: m[1], text: m[1], component: 'rect' };
+    if (m) return { id: m[1], text: null, component: null };
     return null;
   }
 
