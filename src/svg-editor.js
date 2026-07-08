@@ -240,9 +240,10 @@ export function initSVGEditor(svg, options = {}) {
       return;
     }
 
-    // 空白处：取消选中 + 开始平移
+    // 空白处：取消选中 + 开始平移（仅 pan 模式；select 模式交由外部框选逻辑处理）
     if (selectedEdgeId) { selectEdge(null); if (onEdgeSelectCb) onEdgeSelectCb(null); }
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+    if (!panMode) return; // 选择/框选模式：画布静止
     isPanning = true;
     panStartClientX = e.clientX; panStartClientY = e.clientY;
     panOrigVB = { ...vb };
