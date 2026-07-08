@@ -146,21 +146,25 @@ function renderEdge(edge, theme, nodeMap) {
   const fromNode = nodeMap.get(edge.from);
   const toNode = nodeMap.get(edge.to);
 
-  let start = pts[0];
-  let end = pts[pts.length - 1];
-
-  // 起点：裁剪到 from 节点边界（朝向第二个点）
-  if (fromNode) {
-    const next = pts[1] || end;
-    start = borderPoint(fromNode, next.x, next.y);
-  }
-  // 终点：裁剪到 to 节点边界（朝向倒数第二个点）
-  if (toNode) {
-    const prev = pts[pts.length - 2] || start;
-    end = borderPoint(toNode, prev.x, prev.y);
-  }
-
   const mid = pts.slice(1, -1);
+  let start, end;
+
+  if (mid.length === 0) {
+    // 无拐点：直接用当前节点中心计算起终点，避免 dagre 旧 points 导致边跑位置
+    const fromCx = fromNode ? fromNode.x + fromNode.width / 2 : pts[0].x;
+    const fromCy = fromNode ? fromNode.y + fromNode.height / 2 : pts[0].y;
+    const toCx = toNode ? toNode.x + toNode.width / 2 : pts[pts.length - 1].x;
+    const toCy = toNode ? toNode.y + toNode.height / 2 : pts[pts.length - 1].y;
+    start = fromNode ? borderPoint(fromNode, toCx, toCy) : { x: fromCx, y: fromCy };
+    end = toNode ? borderPoint(toNode, fromCx, fromCy) : { x: toCx, y: toCy };
+  } else {
+    // 有拐点：用拐点作为参考方向裁剪
+    start = pts[0];
+    end = pts[pts.length - 1];
+    if (fromNode) start = borderPoint(fromNode, pts[1].x, pts[1].y);
+    if (toNode) end = borderPoint(toNode, pts[pts.length - 2].x, pts[pts.length - 2].y);
+  }
+
   const all = [start, ...mid, end];
   const style = edge.style || 'line';
   let d;
@@ -212,7 +216,7 @@ function renderGroups(layout, dsl, theme) {
     const stroke = g.stroke || theme.groupStroke;
     const labelColor = g.labelColor || stroke;
     return `
-  <g class="cg-group" data-group-id="${g.id || 'group-' + i}" data-group-label="${escapeXML(g.label || '')}">
+  <g class="cg-group" data-group-id="${escapeXML(g.id || 'group-' + i)}" data-group-label="${escapeXML(g.label || '')}">
     <rect x="${minX}" y="${minY}" width="${maxX - minX}" height="${maxY - minY}"
           rx="8" ry="8" fill="${fill}" stroke="${stroke}" stroke-width="1"
           stroke-dasharray="4 3" opacity="${fill !== 'none' ? '0.8' : '0.5'}" class="cg-group-rect"/>

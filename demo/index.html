@@ -1194,11 +1194,28 @@
         const g = currentDSL.groups.find(x => x.id === groupId);
         if (g) g.label = newText;
       }
+      // 更新 DSL 输出和导出用 SVG，使重命名持久保存
+      if (currentLayout && currentDSL) {
+        $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
+        $('export-btn').dataset.svg = layoutToSVG(currentLayout, currentDSL, {
+          darkMode: CONFIG.style.darkMode,
+          width: CONFIG.style.canvasWidth || null,
+          height: CONFIG.style.canvasHeight || null
+        });
+      }
     }
     function onGroupResize(groupId, x, y, w, h) {
       if (currentDSL?.groups) {
-        const g = currentDSL.groups.find(x => x.id === groupId);
+        const g = currentDSL.groups.find(gr => gr.id === groupId);
         if (g) { g.x = x; g.y = y; g.width = w; g.height = h; }
+      }
+      // 更新导出用 SVG
+      if (currentLayout && currentDSL) {
+        $('export-btn').dataset.svg = layoutToSVG(currentLayout, currentDSL, {
+          darkMode: CONFIG.style.darkMode,
+          width: CONFIG.style.canvasWidth || null,
+          height: CONFIG.style.canvasHeight || null
+        });
       }
     }
 
@@ -1783,18 +1800,21 @@
         // SVG → PNG
         try {
           const img = new Image();
-          const svg64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+          // 替换 width/height 为显式像素值，确保 Image 加载时有固有尺寸
+          const vbMatch = svg.match(/viewBox="([^"]+)"/);
+          let vbW = 800, vbH = 600;
+          if (vbMatch) { const p = vbMatch[1].split(/\s+/); vbW = parseFloat(p[2]); vbH = parseFloat(p[3]); }
+          const exportSvg = svg.replace(/width="100%"/, `width="${vbW}"`).replace(/height="100%"/, `height="${vbH}"`);
+          const svg64 = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(exportSvg)));
           img.onload = () => {
             const canvas = document.createElement('canvas');
-            const vb = svg.match(/viewBox="([^"]+)"/);
-            let w = 800, h = 600;
-            if (vb) { const p = vb[1].split(/\s+/); w = parseFloat(p[2]); h = parseFloat(p[3]); }
-            canvas.width = w * 2; canvas.height = h * 2;
+            canvas.width = vbW * 2; canvas.height = vbH * 2;
             const ctx = canvas.getContext('2d');
             // 默认透明，不画背景
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             canvas.toBlob(blob => { downloadBlob(blob, 'codegraph.png'); showStatus('ok', '<i class="fa-solid fa-circle-check mr-1"></i>已导出 PNG'); });
           };
+          img.onerror = () => { showStatus('err', '<i class="fa-solid fa-circle-xmark mr-1"></i>PNG 导出失败：SVG 加载错误（可能含不支持的元素）'); };
           img.src = svg64;
         } catch (e) { showStatus('err', `<i class="fa-solid fa-circle-xmark mr-1"></i>PNG 导出失败：${e.message}`); }
       } else if (choice === 'json') {

@@ -51,6 +51,16 @@ function findGroupId(target, svgEl) {
   return null;
 }
 
+// 通过 id 安全查找 group 元素（避免 id 含特殊字符导致 querySelector 失败）
+function findGroupElById(svgEl, groupId) {
+  if (!groupId) return null;
+  const groups = svgEl.querySelectorAll('.cg-group');
+  for (const g of groups) {
+    if (g.dataset.groupId === groupId) return g;
+  }
+  return null;
+}
+
 function getViewBox(svgEl) {
   const vb = svgEl.getAttribute('viewBox') || '';
   const p = vb.split(/[\s,]+/).map(Number);
@@ -278,7 +288,7 @@ export function initSVGEditor(svg, options = {}) {
           };
           // 记录 group 内所有成员节点的初始位置
           const memberNodes = [];
-          const gEl = svgEl.querySelector(`.cg-group[data-group-id="${groupId}"]`);
+          const gEl = findGroupElById(svgEl, groupId);
           if (gEl) {
             // group 的成员通过 DOM 内的节点查找
             const allNodes = svgEl.querySelectorAll('[data-node-id]');
@@ -384,7 +394,7 @@ export function initSVGEditor(svg, options = {}) {
       const newX = draggingGroup.origX + dx;
       const newY = draggingGroup.origY + dy;
       // 更新 group 矩形
-      const gEl = svgEl.querySelector(`.cg-group[data-group-id="${draggingGroup.id}"]`);
+      const gEl = findGroupElById(svgEl, draggingGroup.id);
       if (gEl) {
         const rEl = gEl.querySelector('rect');
         if (rEl) { rEl.setAttribute('x', newX); rEl.setAttribute('y', newY); }
@@ -727,7 +737,7 @@ export function initSVGEditor(svg, options = {}) {
 
   // 获取 group 的矩形信息（从 SVG 元素读取）
   function getGroupRect(groupId) {
-    const gEl = svgEl.querySelector(`.cg-group[data-group-id="${groupId}"]`);
+    const gEl = findGroupElById(svgEl, groupId);
     if (!gEl) return null;
     const rectEl = gEl.querySelector('rect');
     if (!rectEl) return null;
@@ -827,7 +837,7 @@ export function initSVGEditor(svg, options = {}) {
     if (h.includes('n')) { newH = Math.max(minSize, origH - dy); newY = origY + (origH - newH); }
     if (h.includes('s')) { newH = Math.max(minSize, origH + dy); }
     // 更新 SVG 中的 group 矩形
-    const gEl = svgEl.querySelector(`.cg-group[data-group-id="${groupResizing.groupId}"]`);
+    const gEl = findGroupElById(svgEl, groupResizing.groupId);
     if (gEl) {
       const rectEl = gEl.querySelector('rect');
       if (rectEl) {
@@ -1146,7 +1156,9 @@ export function initSVGEditor(svg, options = {}) {
     if (nodeId) return;
     const groupId = findGroupId(e.target, svgEl);
     if (!groupId) return;
-    const gEl = svgEl.querySelector(`.cg-group[data-group-id="${groupId}"]`);
+    // 显示边缘触点便于拉伸
+    showGroupSelection(groupId);
+    const gEl = findGroupElById(svgEl, groupId);
     if (!gEl) return;
     const labelEl = gEl.querySelector('text.cg-group-label');
     const rectEl = gEl.querySelector('rect');
