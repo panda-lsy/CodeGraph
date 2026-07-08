@@ -446,6 +446,8 @@
           <button class="tb-btn" id="tb-italic" title="斜体"><i class="fa-solid fa-italic"></i></button>
           <button class="tb-btn" id="tb-br" title="插入换行 (Shift+空格)"><i class="fa-solid fa-return"></i></button>
           <div class="tb-sep"></div>
+          <button class="tb-btn" id="tb-edit" title="多行文本编辑"><i class="fa-solid fa-pen-to-square"></i></button>
+          <div class="tb-sep"></div>
           <div class="tb-palette" id="tb-palette"></div>
           <input type="color" id="tb-color" value="#1e293b" title="自定义颜色" style="width:24px;height:24px;padding:0;border:none;cursor:pointer;background:transparent;">
         </div>
@@ -710,6 +712,39 @@
         overlay.querySelector('.cg-cancel').addEventListener('click', () => close(false));
         overlay.addEventListener('click', e => { if (e.target === overlay) close(false); });
       });
+    }
+
+    // 多行文本编辑对话框
+    function openTextEditDialog(initialText, onOk) {
+      const overlay = document.createElement('div');
+      overlay.className = 'fixed inset-0 z-[100] flex items-center justify-center';
+      overlay.style.background = 'rgba(15,23,42,0.45)';
+      overlay.innerHTML = `<div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl max-w-lg w-full mx-4 overflow-hidden flex flex-col" style="max-height:80vh">
+        <div class="px-5 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <h3 class="text-sm font-semibold flex items-center gap-2"><i class="fa-solid fa-pen-to-square text-primary"></i>多行文本编辑</h3>
+          <span class="text-[10px] text-slate-400">支持 Markdown / TeX / HTML标签 / Shift+Enter换行</span>
+        </div>
+        <div class="p-4 flex-1 min-h-0 flex flex-col">
+          <textarea class="cg-edit-textarea flex-1 w-full text-xs font-mono p-3 rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-primary focus:border-primary resize-none" style="min-height:240px" placeholder="输入节点文本..."></textarea>
+        </div>
+        <div class="px-5 py-3 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
+          <button class="cg-cancel px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition">取消</button>
+          <button class="cg-ok px-3 py-1.5 text-xs rounded-lg bg-primary text-white hover:opacity-90 transition">保存</button>
+        </div>
+      </div>`;
+      document.body.appendChild(overlay);
+      const ta = overlay.querySelector('.cg-edit-textarea');
+      ta.value = initialText;
+      // Shift+Enter 换行，Enter 也换行（textarea 默认），Ctrl+Enter 保存
+      ta.addEventListener('keydown', ev => {
+        if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); overlay.querySelector('.cg-ok').click(); }
+        if (ev.key === 'Escape') { overlay.querySelector('.cg-cancel').click(); }
+      });
+      setTimeout(() => { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 0);
+      const close = (val) => { overlay.remove(); if (val && onOk) onOk(ta.value); };
+      overlay.querySelector('.cg-ok').addEventListener('click', () => close(true));
+      overlay.querySelector('.cg-cancel').addEventListener('click', () => close(false));
+      overlay.addEventListener('click', e => { if (e.target === overlay) close(false); });
     }
 
     // ===== 历史快照（深拷贝 DSL/Layout）=====
@@ -1136,6 +1171,21 @@
       }
     }
 
+    // ===== SubGraph (group) 编辑回调 =====
+    function onGroupTextEdit(groupId, newText) {
+      pushHistory();
+      if (currentDSL?.groups) {
+        const g = currentDSL.groups.find(x => x.id === groupId);
+        if (g) g.label = newText;
+      }
+    }
+    function onGroupResize(groupId, x, y, w, h) {
+      if (currentDSL?.groups) {
+        const g = currentDSL.groups.find(x => x.id === groupId);
+        if (g) { g.x = x; g.y = y; g.width = w; g.height = h; }
+      }
+    }
+
     // 节点文本编辑后回调：更新 DSL + layout + AST
     function onNodeTextEdit(nodeId, newText) {
       if (currentDSL) {
@@ -1233,6 +1283,19 @@
         pushHistory();
         const newText = (n.text || '') + '\n';
         onNodeTextEdit(selectedNodeId, newText);
+      });
+      // 多行文本编辑按钮：弹出对话框
+      $('tb-edit').addEventListener('click', () => {
+        if (!selectedNodeId || !currentLayout) return;
+        const n = (currentLayout.nodes || []).find(x => x.id === selectedNodeId);
+        if (!n) return;
+        const oldText = n.text || '';
+        openTextEditDialog(oldText, (newText) => {
+          if (newText !== oldText) {
+            pushHistory();
+            onNodeTextEdit(selectedNodeId, newText);
+          }
+        });
       });
       // 阻止工具栏上的 mousedown 冒泡到 canvas（避免取消选中）
       $('text-toolbar').addEventListener('mousedown', e => e.stopPropagation());
@@ -1354,6 +1417,8 @@
           onEdgeAddWaypoint: onEdgeAddWaypoint,
           onEdgeUpdateWaypoint: onEdgeUpdateWaypoint,
           onNodeResize: onNodeResize,
+          onGroupTextEdit: onGroupTextEdit,
+          onGroupResize: onGroupResize,
           enableSnap: snapEnabled
         });
         // 节点点击选中（支持 Shift/Ctrl 多选 + 框选）
@@ -1405,6 +1470,13 @@
         });
         // 节点交互开始（resize/rotate 拖拽开始前）：保存历史快照
         svgEl.addEventListener('node-interaction-start', () => { pushHistory(); });
+        // 平移模式下右键 → 框选
+        svgEl.addEventListener('right-mouse-select', e => {
+          const { clientX, clientY } = e.detail;
+          startMarqueeSelect(svgEl, { clientX, clientY });
+        });
+        // 阻止画布默认右键菜单
+        svgEl.addEventListener('contextmenu', e => e.preventDefault());
         // 节点尺寸调整（由 svg-editor 的手柄拖拽派发）
         svgEl.addEventListener('node-resized', e => {
           const { id, x, y, width, height } = e.detail;

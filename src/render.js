@@ -197,17 +197,26 @@ function renderGroups(layout, dsl, theme) {
   return dsl.groups.map((g, i) => {
     const members = (g.members || []).map(id => nodeMap.get(id)).filter(Boolean);
     if (!members.length) return '';
-    const minX = Math.min(...members.map(n => n.x)) - 15;
-    const minY = Math.min(...members.map(n => n.y)) - 25;
-    const maxX = Math.max(...members.map(n => n.x + n.width)) + 15;
-    const maxY = Math.max(...members.map(n => n.y + n.height)) + 15;
+    // 优先使用 group 自身的 x/y/width/height（支持手动拉伸），否则按成员包围盒计算
+    let minX, minY, maxX, maxY;
+    if (g.x != null && g.y != null && g.width != null && g.height != null) {
+      minX = g.x; minY = g.y; maxX = g.x + g.width; maxY = g.y + g.height;
+    } else {
+      minX = Math.min(...members.map(n => n.x)) - 15;
+      minY = Math.min(...members.map(n => n.y)) - 25;
+      maxX = Math.max(...members.map(n => n.x + n.width)) + 15;
+      maxY = Math.max(...members.map(n => n.y + n.height)) + 15;
+    }
+    const fill = g.fill || 'none';
+    const stroke = g.stroke || theme.groupStroke;
+    const labelColor = g.labelColor || stroke;
     return `
-  <g class="cg-group">
+  <g class="cg-group" data-group-id="${g.id || 'group-' + i}" data-group-label="${escapeXML(g.label || '')}">
     <rect x="${minX}" y="${minY}" width="${maxX - minX}" height="${maxY - minY}"
-          rx="8" ry="8" fill="none" stroke="${theme.groupStroke}" stroke-width="1"
-          stroke-dasharray="4 3" opacity="0.5"/>
+          rx="8" ry="8" fill="${fill}" stroke="${stroke}" stroke-width="1"
+          stroke-dasharray="4 3" opacity="${fill !== 'none' ? '0.8' : '0.5'}" class="cg-group-rect"/>
     <text x="${minX + 8}" y="${minY + 14}" font-family="${theme.fontFamily}"
-          font-size="11" fill="${theme.groupStroke}">${escapeXML(g.label || '')}</text>
+          font-size="11" fill="${labelColor}" class="cg-group-label">${escapeXML(g.label || '')}</text>
   </g>`;
   }).join('');
 }

@@ -41,6 +41,16 @@ function findEdgeId(target, svgEl) {
   return null;
 }
 
+// 从事件 target 向上查找所属的 group id（cg-group 元素）
+function findGroupId(target, svgEl) {
+  let el = target;
+  while (el && el !== svgEl) {
+    if (el.classList && el.classList.contains('cg-group') && el.dataset.groupId) return el.dataset.groupId;
+    el = el.parentNode;
+  }
+  return null;
+}
+
 function getViewBox(svgEl) {
   const vb = svgEl.getAttribute('viewBox') || '';
   const p = vb.split(/[\s,]+/).map(Number);
@@ -134,7 +144,9 @@ export function initSVGEditor(svg, options = {}) {
   const onEdgeSelectCb = options.onEdgeSelect || null;
   const onEdgeAddWaypointCb = options.onEdgeAddWaypoint || null;
   const onEdgeUpdateWaypointCb = options.onEdgeUpdateWaypoint || null;
-  onNodeResizeCb = options.onNodeResize || null;
+ const onNodeResizeCb = options.onNodeResize || null;
+  const onGroupTextEditCb = options.onGroupTextEdit || null;
+  const onGroupResizeCb = options.onGroupResize || null;
   let enableSnap = options.enableSnap !== false;
   let panMode = false; // 手型平移模式：点击节点也平移而非拖拽
 
@@ -185,6 +197,24 @@ export function initSVGEditor(svg, options = {}) {
     const edgeId = findEdgeId(target, svgEl);
     const isWaypoint = target.classList && target.classList.contains('cg-waypoint');
 
+    // 快捷手势：右键拖拽临时切换模式
+    // - 选择模式 + 右键 → 平移画布
+    // - 平移模式 + 右键 → 框选（派发事件给外部）
+    if (e.button === 2) {
+      e.preventDefault();
+      if (panMode) {
+        // 平移模式下右键 → 派发 right-mouse-select 事件，由外部启动框选
+        svgEl.dispatchEvent(new CustomEvent('right-mouse-select', { detail: { clientX: e.clientX, clientY: e.clientY } }));
+      } else {
+        // 选择模式下右键 → 临时平移画布
+        isPanning = true;
+        panStartClientX = e.clientX; panStartClientY = e.clientY;
+        panOrigVB = { ...vb };
+        svgEl.style.cursor = 'grabbing';
+      }
+      return;
+    }
+
     // 连接模式：点击节点选起点/终点
     if (connectMode) {
       if (nodeId) {
@@ -232,6 +262,17 @@ export function initSVGEditor(svg, options = {}) {
       return;
     }
 
+    // group 选中（点击 group 背景矩形但非节点）：显示 group 选择框 + resize 手柄
+    if (!nodeId && !panMode) {
+      const groupId = findGroupId(target, svgEl);
+      if (groupId) {
+        showGroupSelection(groupId);
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+    }
+
     // 边选中
     if (edgeId) {
       selectEdge(edgeId);
@@ -274,6 +315,10 @@ export function initSVGEditor(svg, options = {}) {
     }
     if (resizing) {
       updateResize(e);
+      return;
+    }
+    if (groupResizing) {
+      updateGroupResize(e);
       return;
     }
     if (rotating) {
@@ -321,6 +366,16 @@ export function initSVGEditor(svg, options = {}) {
     }
     if (resizing) {
       resizing = null;
+      svgEl.style.cursor = '';
+      // 显示对/错确认按钮（节点中心上方），等待用户确认或回滚
+      if (pendingResize) {
+        const cx = pendingResize.curX + pendingResize.curW / 2;
+        const cy = pendingResize.curY;
+        showConfirmButtons(cx, cy);
+      }
+    }
+    if (groupResizing) {
+      groupResizing = null;
       svgEl.style.cursor = '';
     }
     if (rotating) {
@@ -540,18 +595,180 @@ export function initSVGEditor(svg, options = {}) {
   }
 
   function hideNodeSelection() {
+    // 隐藏前先提交未确认的 resize
+    commitPendingResize();
     if (selectionOverlay) { selectionOverlay.remove(); selectionOverlay = null; }
     selectedNodeIdForResize = null;
+    hideGroupSelection();
+  }
+
+  // ===== group 选择框 + resize（双击编辑由 dblclick 处理）=====
+  let groupSelectionOverlay = null;
+  let selectedGroupId = null;
+  let groupResizing = null; // {handle, startClientX, startClientY, origX, origY, origW, origH, groupId}
+
+  // 获取 group 的矩形信息（从 SVG 元素读取）
+  function getGroupRect(groupId) {
+    const gEl = svgEl.querySelector(`.cg-group[data-group-id="${groupId}"]`);
+    if (!gEl) return null;
+    const rectEl = gEl.querySelector('rect');
+    if (!rectEl) return null;
+    return {
+      x: parseFloat(rectEl.getAttribute('x')),
+      y: parseFloat(rectEl.getAttribute('y')),
+      width: parseFloat(rectEl.getAttribute('width')),
+      height: parseFloat(rectEl.getAttribute('height'))
+    };
+  }
+
+  function showGroupSelection(groupId) {
+    hideGroupSelection();
+    if (selectedEdgeId) selectEdge(null);
+    const rect = getGroupRect(groupId);
+    if (!rect) return;
+    selectedGroupId = groupId;
+    groupSelectionOverlay = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    groupSelectionOverlay.setAttribute('class', 'cg-group-selection');
+    groupSelectionOverlay.style.pointerEvents = 'auto';
+
+    // 选择框
+    const box = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    box.setAttribute('x', rect.x - 2);
+    box.setAttribute('y', rect.y - 2);
+    box.setAttribute('width', rect.width + 4);
+    box.setAttribute('height', rect.height + 4);
+    box.setAttribute('fill', 'none');
+    box.setAttribute('stroke', '#06b6d4');
+    box.setAttribute('stroke-width', '1.5');
+    box.setAttribute('stroke-dasharray', '5 3');
+    box.style.pointerEvents = 'none';
+    groupSelectionOverlay.appendChild(box);
+
+    // 8 个 resize 手柄（青色，区别于节点的紫色）
+    const handles = [
+      { name: 'nw', x: rect.x - 2, y: rect.y - 2, cursor: 'nwse-resize' },
+      { name: 'n', x: rect.x + rect.width / 2, y: rect.y - 2, cursor: 'ns-resize' },
+      { name: 'ne', x: rect.x + rect.width + 2, y: rect.y - 2, cursor: 'nese-resize' },
+      { name: 'e', x: rect.x + rect.width + 2, y: rect.y + rect.height / 2, cursor: 'ew-resize' },
+      { name: 'se', x: rect.x + rect.width + 2, y: rect.y + rect.height + 2, cursor: 'nwse-resize' },
+      { name: 's', x: rect.x + rect.width / 2, y: rect.y + rect.height + 2, cursor: 'ns-resize' },
+      { name: 'sw', x: rect.x - 2, y: rect.y + rect.height + 2, cursor: 'nese-resize' },
+      { name: 'w', x: rect.x - 2, y: rect.y + rect.height / 2, cursor: 'ew-resize' }
+    ];
+    handles.forEach(h => {
+      const dot = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      dot.setAttribute('x', h.x - 4);
+      dot.setAttribute('y', h.y - 4);
+      dot.setAttribute('width', 8);
+      dot.setAttribute('height', 8);
+      dot.setAttribute('fill', '#fff');
+      dot.setAttribute('stroke', '#06b6d4');
+      dot.setAttribute('stroke-width', '1.5');
+      dot.setAttribute('rx', '1.5');
+      dot.style.cursor = h.cursor;
+      dot.dataset.ghandle = h.name;
+      dot.addEventListener('mousedown', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        startGroupResize(h.name, rect, e);
+      });
+      groupSelectionOverlay.appendChild(dot);
+    });
+    svgEl.appendChild(groupSelectionOverlay);
+  }
+
+  function hideGroupSelection() {
+    if (groupSelectionOverlay) { groupSelectionOverlay.remove(); groupSelectionOverlay = null; }
+    selectedGroupId = null;
+    groupResizing = null;
+  }
+
+  function startGroupResize(handle, rect, e) {
+    svgEl.dispatchEvent(new CustomEvent('node-interaction-start', { detail: { id: selectedGroupId } }));
+    groupResizing = {
+      handle,
+      startClientX: e.clientX, startClientY: e.clientY,
+      origX: rect.x, origY: rect.y,
+      origW: rect.width, origH: rect.height,
+      groupId: selectedGroupId
+    };
+    svgEl.style.cursor = 'grabbing';
+  }
+
+  function updateGroupResize(e) {
+    if (!groupResizing) return;
+    const rect = svgEl.getBoundingClientRect();
+    const dx = (e.clientX - groupResizing.startClientX) * (vb.w / rect.width);
+    const dy = (e.clientY - groupResizing.startClientY) * (vb.h / rect.height);
+    let { origX, origY, origW, origH } = groupResizing;
+    let newX = origX, newY = origY, newW = origW, newH = origH;
+    const h = groupResizing.handle;
+    const minSize = 40;
+    if (h.includes('w')) { newW = Math.max(minSize, origW - dx); newX = origX + (origW - newW); }
+    if (h.includes('e')) { newW = Math.max(minSize, origW + dx); }
+    if (h.includes('n')) { newH = Math.max(minSize, origH - dy); newY = origY + (origH - newH); }
+    if (h.includes('s')) { newH = Math.max(minSize, origH + dy); }
+    // 更新 SVG 中的 group 矩形
+    const gEl = svgEl.querySelector(`.cg-group[data-group-id="${groupResizing.groupId}"]`);
+    if (gEl) {
+      const rectEl = gEl.querySelector('rect');
+      if (rectEl) {
+        rectEl.setAttribute('x', newX);
+        rectEl.setAttribute('y', newY);
+        rectEl.setAttribute('width', newW);
+        rectEl.setAttribute('height', newH);
+      }
+      // label 位置随左上角移动
+      const labelEl = gEl.querySelector('text');
+      if (labelEl) {
+        labelEl.setAttribute('x', newX + 8);
+        labelEl.setAttribute('y', newY + 14);
+      }
+    }
+    // 更新选择框 + 手柄
+    if (groupSelectionOverlay) {
+      const box = groupSelectionOverlay.querySelector('rect:not([data-ghandle])');
+      if (box) {
+        box.setAttribute('x', newX - 2);
+        box.setAttribute('y', newY - 2);
+        box.setAttribute('width', newW + 4);
+        box.setAttribute('height', newH + 4);
+      }
+      const handleEls = groupSelectionOverlay.querySelectorAll('[data-ghandle]');
+      const positions = [
+        { x: newX - 2, y: newY - 2 },
+        { x: newX + newW / 2, y: newY - 2 },
+        { x: newX + newW + 2, y: newY - 2 },
+        { x: newX + newW + 2, y: newY + newH / 2 },
+        { x: newX + newW + 2, y: newY + newH + 2 },
+        { x: newX + newW / 2, y: newY + newH + 2 },
+        { x: newX - 2, y: newY + newH + 2 },
+        { x: newX - 2, y: newY + newH / 2 }
+      ];
+      handleEls.forEach((el, i) => {
+        if (positions[i]) {
+          el.setAttribute('x', positions[i].x - 4);
+          el.setAttribute('y', positions[i].y - 4);
+        }
+      });
+    }
+    // 派发 group-resized 事件（供 demo 同步数据）
+    svgEl.dispatchEvent(new CustomEvent('group-resized', { detail: { id: groupResizing.groupId, x: newX, y: newY, width: newW, height: newH } }));
+    if (onGroupResizeCb) onGroupResizeCb(groupResizing.groupId, newX, newY, newW, newH);
   }
 
   function startResize(handle, rect, e) {
+    // 先提交前一次未确认的 resize（如果有）
+    commitPendingResize();
     svgEl.dispatchEvent(new CustomEvent('node-interaction-start', { detail: { id: selectedNodeIdForResize } }));
     resizing = {
       handle,
       startClientX: e.clientX, startClientY: e.clientY,
       origX: rect.x, origY: rect.y,
       origW: rect.width, origH: rect.height,
-      nodeId: selectedNodeIdForResize
+      nodeId: selectedNodeIdForResize,
+      // 记录初始状态用于"叉号"回滚
+      initX: rect.x, initY: rect.y, initW: rect.width, initH: rect.height
     };
     svgEl.style.cursor = 'grabbing';
   }
@@ -630,8 +847,82 @@ export function initSVGEditor(svg, options = {}) {
     }
     // 更新选择框和手柄位置
     updateSelectionBox(newX, newY, newW, newH);
-    // 派发 node-resized 事件
-    svgEl.dispatchEvent(new CustomEvent('node-resized', { detail: { id: resizing.nodeId, x: newX, y: newY, width: newW, height: newH } }));
+    // 记录 pending 状态（不立即派发事件，等用户点对号确认）
+    pendingResize = {
+      nodeId: resizing.nodeId,
+      curX: newX, curY: newY, curW: newW, curH: newH,
+      initX: resizing.initX, initY: resizing.initY, initW: resizing.initW, initH: resizing.initH
+    };
+  }
+
+  // pending resize 状态：拖拽中记录当前值，松开后显示对错按钮
+  let pendingResize = null;
+  let confirmButtons = null;
+
+  function commitPendingResize() {
+    if (!pendingResize) return;
+    const { nodeId, curX, curY, curW, curH } = pendingResize;
+    svgEl.dispatchEvent(new CustomEvent('node-resized', { detail: { id: nodeId, x: curX, y: curY, width: curW, height: curH } }));
+    pendingResize = null;
+    removeConfirmButtons();
+  }
+
+  function rollbackPendingResize() {
+    if (!pendingResize) return;
+    const { nodeId, initX, initY, initW, initH } = pendingResize;
+    // 回滚节点到初始尺寸
+    if (onNodeResizeCb) {
+      onNodeResizeCb(nodeId, initX, initY, initW, initH);
+    } else {
+      const nodeEl = svgEl.querySelector(`[data-node-id="${nodeId}"]`);
+      if (nodeEl) nodeEl.setAttribute('transform', buildNodeTransform(nodeEl, initX, initY, initW, initH));
+    }
+    updateSelectionBox(initX, initY, initW, initH);
+    pendingResize = null;
+    removeConfirmButtons();
+  }
+
+  function removeConfirmButtons() {
+    if (confirmButtons) { confirmButtons.remove(); confirmButtons = null; }
+  }
+
+  function showConfirmButtons(cx, cy) {
+    removeConfirmButtons();
+    if (!selectionOverlay) return;
+    confirmButtons = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    confirmButtons.setAttribute('class', 'cg-confirm-btns');
+    confirmButtons.style.pointerEvents = 'auto';
+    // 对号（绿）- 右上
+    const okBtn = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    okBtn.setAttribute('cx', cx + 14);
+    okBtn.setAttribute('cy', cy - 14);
+    okBtn.setAttribute('r', 9);
+    okBtn.setAttribute('fill', '#22c55e');
+    okBtn.setAttribute('stroke', '#fff');
+    okBtn.setAttribute('stroke-width', '1.5');
+    okBtn.style.cursor = 'pointer';
+    const okText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    okText.setAttribute('x', cx + 14); okText.setAttribute('y', cy - 10);
+    okText.setAttribute('text-anchor', 'middle'); okText.setAttribute('font-size', '12');
+    okText.setAttribute('fill', '#fff'); okText.textContent = '✓';
+    okBtn.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); commitPendingResize(); });
+    // 叉号（红）- 左上
+    const cancelBtn = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    cancelBtn.setAttribute('cx', cx - 14);
+    cancelBtn.setAttribute('cy', cy - 14);
+    cancelBtn.setAttribute('r', 9);
+    cancelBtn.setAttribute('fill', '#ef4444');
+    cancelBtn.setAttribute('stroke', '#fff');
+    cancelBtn.setAttribute('stroke-width', '1.5');
+    cancelBtn.style.cursor = 'pointer';
+    const cancelText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    cancelText.setAttribute('x', cx - 14); cancelText.setAttribute('y', cy - 10);
+    cancelText.setAttribute('text-anchor', 'middle'); cancelText.setAttribute('font-size', '12');
+    cancelText.setAttribute('fill', '#fff'); cancelText.textContent = '✕';
+    cancelBtn.addEventListener('mousedown', e => { e.preventDefault(); e.stopPropagation(); rollbackPendingResize(); });
+    confirmButtons.appendChild(okBtn); confirmButtons.appendChild(okText);
+    confirmButtons.appendChild(cancelBtn); confirmButtons.appendChild(cancelText);
+    selectionOverlay.appendChild(confirmButtons);
   }
 
   function updateSelectionBox(x, y, w, h) {
@@ -717,6 +1008,61 @@ export function initSVGEditor(svg, options = {}) {
   };
   svgEl.addEventListener('dblclick', onDblClickEdge);
 
+  // ===== 双击 group 编辑 label =====
+  const onDblClickGroup = e => {
+    if (connectMode) return;
+    // 如果点的是节点，优先让节点编辑
+    const nodeId = findNodeId(e.target, svgEl);
+    if (nodeId) return;
+    const groupId = findGroupId(e.target, svgEl);
+    if (!groupId) return;
+    const gEl = svgEl.querySelector(`.cg-group[data-group-id="${groupId}"]`);
+    if (!gEl) return;
+    const labelEl = gEl.querySelector('text.cg-group-label');
+    const rectEl = gEl.querySelector('rect');
+    if (!labelEl || !rectEl) return;
+    const oldText = labelEl.textContent || '';
+    const x = parseFloat(rectEl.getAttribute('x'));
+    const y = parseFloat(rectEl.getAttribute('y'));
+    const w = parseFloat(rectEl.getAttribute('width'));
+    // 隐藏原 label
+    labelEl.style.display = 'none';
+    // 用 foreignObject 内嵌 input 编辑
+    const fo = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+    fo.setAttribute('x', x);
+    fo.setAttribute('y', y - 2);
+    fo.setAttribute('width', Math.max(w, 120));
+    fo.setAttribute('height', 22);
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = oldText;
+    input.style.cssText = `width:100%;height:100%;border:2px solid #06b6d4;border-radius:4px;font-size:11px;background:#fff;color:#000;outline:none;padding:0 4px;box-sizing:border-box;`;
+    fo.appendChild(input);
+    gEl.appendChild(fo);
+    input.focus();
+    input.select();
+    let finished = false;
+    const finishEdit = () => {
+      if (finished) return;
+      finished = true;
+      const newText = input.value;
+      fo.remove();
+      labelEl.textContent = newText;
+      labelEl.style.display = '';
+      if (onGroupTextEditCb && newText !== oldText) {
+        onGroupTextEditCb(groupId, newText);
+      }
+    };
+    input.addEventListener('blur', finishEdit);
+    input.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter') { ev.preventDefault(); input.blur(); }
+      if (ev.key === 'Escape') { input.value = oldText; input.blur(); }
+    });
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  svgEl.addEventListener('dblclick', onDblClickGroup);
+
   // ===== 双击节点内联编辑文本（兼容 dagre text 和 Mermaid foreignObject/span）=====
   const onDblClickNode = e => {
     if (connectMode) return;
@@ -796,6 +1142,7 @@ export function initSVGEditor(svg, options = {}) {
       svgEl.removeEventListener('mousedown', onMouseDown);
       svgEl.removeEventListener('dblclick', onDblClickNode);
       svgEl.removeEventListener('dblclick', onDblClickEdge);
+      svgEl.removeEventListener('dblclick', onDblClickGroup);
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
       hideSnapGuides();
@@ -815,9 +1162,12 @@ export function initSVGEditor(svg, options = {}) {
       if (selectedEdgeId) selectEdge(null);
       if (connectFromId) { highlightNode(connectFromId, false); connectFromId = null; }
       hideNodeSelection();
+      hideGroupSelection();
     },
     showNodeSelection(nodeId) { showNodeSelection(nodeId); },
     hideNodeSelection() { hideNodeSelection(); },
+    showGroupSelection(groupId) { showGroupSelection(groupId); },
+    hideGroupSelection() { hideGroupSelection(); },
     showWaypoints(edgeId, points) {
       svgEl.querySelectorAll('.cg-waypoint').forEach(el => el.remove());
       if (!points || points.length < 2) return;
