@@ -275,11 +275,6 @@
               <div id="comp-grid" class="space-y-2"></div>
             </div>
           </details>
-          <!-- 插入图片 -->
-          <input type="file" id="image-input" accept="image/*" class="hidden">
-          <button id="insert-image-btn" class="w-full py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition flex items-center justify-center gap-1.5">
-            <i class="fa-solid fa-image text-primary"></i>插入图片
-          </button>
           <!-- 图层管理 -->
           <details class="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
             <summary class="text-xs font-medium text-slate-600 dark:text-slate-400 px-3 py-1.5 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-1 select-none">
@@ -363,24 +358,63 @@
     <section class="flex-1 flex flex-col min-w-0">
       <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
         <div class="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
             <h2 class="text-sm font-semibold">渲染结果</h2>
             <select id="theme-quick" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 dark:bg-slate-800">
               <option value="Nature">Nature</option>
               <option value="Science">Science</option>
               <option value="Modern">Modern</option>
             </select>
-            <button id="dark-quick" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="切换日间/夜间">
-              <i class="fa-solid fa-sun"></i>
-            </button>
-            <button id="reset-view" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="重置视图">
-              <i class="fa-solid fa-arrows-to-circle"></i>
-            </button>
+            <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5"></div>
+            <!-- 选择/平移模式 -->
+            <div class="flex items-center rounded border border-slate-300 dark:border-slate-700 overflow-hidden" id="select-mode-group">
+              <button id="mode-select" class="text-xs px-2 py-1 bg-primary text-white transition" title="选择/框选模式（支持多选）">
+                <i class="fa-solid fa-arrow-pointer"></i>
+              </button>
+              <button id="mode-pan" class="text-xs px-2 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="手型平移模式">
+                <i class="fa-solid fa-hand"></i>
+              </button>
+            </div>
             <button id="snap-toggle" class="text-xs px-2 py-1 rounded border border-primary text-primary bg-indigo-50 dark:bg-indigo-950/40 transition" title="智能边界吸附">
               <i class="fa-solid fa-magnet"></i>
             </button>
             <button id="connect-toggle" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="节点连接模式（点击两个节点创建边）">
               <i class="fa-solid fa-link"></i>
+            </button>
+            <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5"></div>
+            <!-- 撤销/重做 -->
+            <button id="tool-undo" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed" title="撤销 (Ctrl+Z)" disabled>
+              <i class="fa-solid fa-rotate-left"></i>
+            </button>
+            <button id="tool-redo" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed" title="重做 (Ctrl+Y)" disabled>
+              <i class="fa-solid fa-rotate-right"></i>
+            </button>
+            <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5"></div>
+            <!-- 复制/剪贴/粘贴 -->
+            <button id="tool-copy" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed" title="复制 (Ctrl+C)" disabled>
+              <i class="fa-solid fa-copy"></i>
+            </button>
+            <button id="tool-cut" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed" title="剪切 (Ctrl+X)" disabled>
+              <i class="fa-solid fa-scissors"></i>
+            </button>
+            <button id="tool-paste" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-40 disabled:cursor-not-allowed" title="粘贴 (Ctrl+V)" disabled>
+              <i class="fa-solid fa-paste"></i>
+            </button>
+            <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5"></div>
+            <!-- 插入图片 -->
+            <input type="file" id="image-input" accept="image/*" class="hidden">
+            <button id="insert-image-btn" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="插入图片到画布">
+              <i class="fa-solid fa-image"></i>
+            </button>
+            <!-- 清空画布 -->
+            <button id="tool-clear" class="text-xs px-2 py-1 rounded border border-red-300 dark:border-red-800 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition" title="清空画布">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+            <button id="reset-view" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="重置视图">
+              <i class="fa-solid fa-arrows-to-circle"></i>
+            </button>
+            <button id="dark-quick" class="text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition" title="切换日间/夜间">
+              <i class="fa-solid fa-sun"></i>
             </button>
           </div>
           <div class="flex gap-2 flex-wrap">
@@ -432,9 +466,11 @@
         <div class="px-4 py-2 border-t border-slate-200 dark:border-slate-800 flex flex-wrap gap-2 items-center text-xs text-slate-500 dark:text-slate-400">
           <span><i class="fa-solid fa-hand-pointer mr-1"></i>拖拽节点</span>
           <span class="opacity-40">·</span>
+          <span><i class="fa-solid fa-vector-square mr-1"></i>Shift+点击/框选多选</span>
+          <span class="opacity-40">·</span>
           <span><i class="fa-solid fa-mouse-pointer mr-1"></i>双击编辑</span>
           <span class="opacity-40">·</span>
-          <span><i class="fa-solid fa-arrows-up-down-left-right mr-1"></i>拖拽平移</span>
+          <span><i class="fa-solid fa-keyboard mr-1"></i>Ctrl+Z/C/X/V</span>
           <span class="opacity-40">·</span>
           <span><i class="fa-solid fa-magnifying-glass mr-1"></i>滚轮缩放</span>
           <div class="flex-1"></div>
@@ -636,9 +672,243 @@
     // 全局状态：当前 DSL / Layout / AST / SVG 编辑器实例 / Mermaid 源码
     let currentDSL = null, currentLayout = null, currentAST = null, currentSVGEeditor = null, currentPrompt = '';
     let currentMermaidCode = null; // Mermaid 模式下的源码（用于编辑回写）
-    let selectedNodeId = null; // 当前选中的节点（用于删除）
+    let selectedNodeId = null; // 当前选中的节点（用于删除/工具栏）
     let selectedEdgeIdx = null; // 当前选中的边索引（用于边编辑）
     let snapEnabled = true; // 智能吸附开关
+    let dragSnapshotTaken = false; // 拖拽历史快照标志（防止重复 push）
+    let selectedNodeIds = new Set(); // 多选节点集合
+    let selectMode = 'select'; // 'select'（点选/框选）| 'pan'（手型平移）
+    // 撤销/重做历史栈
+    const undoStack = [];
+    const redoStack = [];
+    const HISTORY_LIMIT = 50;
+    // 剪贴板（节点 + 关联边）
+    let clipboard = null;
+
+    // ===== 自定义确认对话框（替代原生 confirm）=====
+    function cgConfirm(title, message, okText = '确定', cancelText = '取消', danger = false) {
+      return new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.className = 'fixed inset-0 z-[100] flex items-center justify-center';
+        overlay.style.background = 'rgba(15,23,42,0.45)';
+        overlay.innerHTML = `<div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xl max-w-sm w-full mx-4 overflow-hidden">
+          <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h3 class="text-sm font-semibold flex items-center gap-2">${danger ? '<i class="fa-solid fa-triangle-exclamation text-red-500"></i>' : '<i class="fa-solid fa-circle-info text-primary"></i>'}${title}</h3>
+          </div>
+          <div class="px-5 py-4 text-xs text-slate-600 dark:text-slate-300">${message}</div>
+          <div class="px-5 py-3 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
+            <button class="cg-cancel px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition">${cancelText}</button>
+            <button class="cg-ok px-3 py-1.5 text-xs rounded-lg text-white transition ${danger ? 'bg-red-500 hover:bg-red-600' : 'bg-primary hover:opacity-90'}">${okText}</button>
+          </div>
+        </div>`;
+        document.body.appendChild(overlay);
+        const close = (val) => { overlay.remove(); resolve(val); };
+        overlay.querySelector('.cg-ok').addEventListener('click', () => close(true));
+        overlay.querySelector('.cg-cancel').addEventListener('click', () => close(false));
+        overlay.addEventListener('click', e => { if (e.target === overlay) close(false); });
+      });
+    }
+
+    // ===== 历史快照（深拷贝 DSL/Layout）=====
+    function snapshotState() {
+      return {
+        dsl: currentDSL ? JSON.parse(JSON.stringify(currentDSL)) : null,
+        layout: currentLayout ? JSON.parse(JSON.stringify(currentLayout)) : null,
+        prompt: currentPrompt
+      };
+    }
+    function pushHistory() {
+      // 当前状态入 undo 栈，清空 redo
+      undoStack.push(snapshotState());
+      if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+      redoStack.length = 0;
+      updateUndoRedoButtons();
+    }
+    function restoreState(state) {
+      currentDSL = state.dsl ? JSON.parse(JSON.stringify(state.dsl)) : null;
+      currentLayout = state.layout ? JSON.parse(JSON.stringify(state.layout)) : null;
+      currentPrompt = state.prompt || '';
+      $('prompt').value = currentPrompt;
+      selectedNodeId = null;
+      selectedNodeIds.clear();
+      selectedEdgeIdx = null;
+      const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
+      if (currentLayout && currentDSL) {
+        renderResult(currentLayout, currentDSL);
+        if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
+      } else {
+        $('canvas').innerHTML = '<div class="text-center text-slate-400 dark:text-slate-500 absolute inset-0 flex flex-col items-center justify-center pointer-events-none"><i class="fa-solid fa-image text-5xl mb-3 opacity-40"></i><p class="text-sm">输入描述后点击「生成矢量图」</p></div>';
+      }
+      updateUndoRedoButtons();
+    }
+    function undo() {
+      if (!undoStack.length) return;
+      redoStack.push(snapshotState());
+      const prev = undoStack.pop();
+      restoreState(prev);
+    }
+    function redo() {
+      if (!redoStack.length) return;
+      undoStack.push(snapshotState());
+      const next = redoStack.pop();
+      restoreState(next);
+    }
+    function updateUndoRedoButtons() {
+      const ub = $('tool-undo'), rb = $('tool-redo');
+      if (ub) ub.disabled = undoStack.length === 0;
+      if (rb) rb.disabled = redoStack.length === 0;
+    }
+
+    // ===== 多选视觉刷新（高亮所有选中节点）=====
+    function refreshMultiSelection() {
+      // 清除旧的多选高亮
+      const svgEl = $('canvas').querySelector('svg');
+      if (!svgEl) return;
+      svgEl.querySelectorAll('.cg-multi-sel').forEach(el => el.remove());
+      if (!selectedNodeIds.size) return;
+      const layoutMap = new Map((currentLayout?.nodes || []).map(n => [n.id, n]));
+      const overlay = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      overlay.setAttribute('class', 'cg-multi-sel');
+      overlay.style.pointerEvents = 'none';
+      selectedNodeIds.forEach(id => {
+        const n = layoutMap.get(id);
+        if (!n) return;
+        const box = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        box.setAttribute('x', n.x - 2); box.setAttribute('y', n.y - 2);
+        box.setAttribute('width', n.width + 4); box.setAttribute('height', n.height + 4);
+        box.setAttribute('fill', 'none'); box.setAttribute('stroke', '#06b6d4');
+        box.setAttribute('stroke-width', '1.5'); box.setAttribute('stroke-dasharray', '3 2');
+        overlay.appendChild(box);
+      });
+      svgEl.appendChild(overlay);
+    }
+
+    // ===== 框选（Marquee Select）=====
+    let marqueeRect = null;
+    let marqueeStart = null;
+    function startMarqueeSelect(svgEl, e) {
+      const rect = svgEl.getBoundingClientRect();
+      const vb = currentSVGEeditor.getTransform().viewBox;
+      const sx = vb.x + ((e.clientX - rect.left) / rect.width) * vb.w;
+      const sy = vb.y + ((e.clientY - rect.top) / rect.height) * vb.h;
+      marqueeStart = { x: sx, y: sy };
+      marqueeRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      marqueeRect.setAttribute('class', 'cg-marquee');
+      marqueeRect.setAttribute('fill', 'rgba(99,102,241,0.08)');
+      marqueeRect.setAttribute('stroke', '#6366f1');
+      marqueeRect.setAttribute('stroke-width', '1');
+      marqueeRect.setAttribute('stroke-dasharray', '4 2');
+      svgEl.appendChild(marqueeRect);
+      const onMove = (ev) => {
+        if (!marqueeRect || !marqueeStart) return;
+        const cx = vb.x + ((ev.clientX - rect.left) / rect.width) * vb.w;
+        const cy = vb.y + ((ev.clientY - rect.top) / rect.height) * vb.h;
+        const x = Math.min(marqueeStart.x, cx);
+        const y = Math.min(marqueeStart.y, cy);
+        const w = Math.abs(cx - marqueeStart.x);
+        const h = Math.abs(cy - marqueeStart.y);
+        marqueeRect.setAttribute('x', x);
+        marqueeRect.setAttribute('y', y);
+        marqueeRect.setAttribute('width', w);
+        marqueeRect.setAttribute('height', h);
+      };
+      const onUp = () => {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        if (!marqueeRect || !marqueeStart) return;
+        const mx = parseFloat(marqueeRect.getAttribute('x'));
+        const my = parseFloat(marqueeRect.getAttribute('y'));
+        const mw = parseFloat(marqueeRect.getAttribute('width'));
+        const mh = parseFloat(marqueeRect.getAttribute('height'));
+        marqueeRect.remove();
+        marqueeRect = null;
+        // 只有拖动距离足够才算框选（避免误触）
+        if (mw < 5 && mh < 5) { marqueeStart = null; return; }
+        // 选中所有与框相交的节点
+        selectedNodeIds.clear();
+        (currentLayout?.nodes || []).forEach(n => {
+          if (n.x < mx + mw && n.x + n.width > mx && n.y < my + mh && n.y + n.height > my) {
+            selectedNodeIds.add(n.id);
+          }
+        });
+        marqueeStart = null;
+        selectedNodeId = selectedNodeIds.size === 1 ? [...selectedNodeIds][0] : null;
+        $('tool-delete').disabled = selectedNodeIds.size === 0;
+        updateClipboardButtons();
+        if (selectedNodeIds.size === 1 && currentSVGEeditor) currentSVGEeditor.showNodeSelection(selectedNodeId);
+        else if (currentSVGEeditor) currentSVGEeditor.hideNodeSelection();
+        refreshMultiSelection();
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+      e.preventDefault();
+    }
+
+    // ===== 剪贴板按钮状态 =====
+    function updateClipboardButtons() {
+      const hasSel = selectedNodeIds.size > 0;
+      $('tool-copy').disabled = !hasSel;
+      $('tool-cut').disabled = !hasSel;
+      $('tool-paste').disabled = !clipboard;
+    }
+
+    // ===== 复制/剪切/粘贴 =====
+    function copySelection() {
+      if (!selectedNodeIds.size || !currentDSL) return;
+      const nodes = (currentDSL.nodes || []).filter(n => selectedNodeIds.has(n.id));
+      const ids = new Set(nodes.map(n => n.id));
+      const edges = (currentDSL.edges || []).filter(e => ids.has(e.from) && ids.has(e.to));
+      const layoutNodes = (currentLayout?.nodes || []).filter(n => selectedNodeIds.has(n.id));
+      clipboard = { nodes: JSON.parse(JSON.stringify(nodes)), edges: JSON.parse(JSON.stringify(edges)), layoutNodes: JSON.parse(JSON.stringify(layoutNodes)) };
+      updateClipboardButtons();
+      showStatus('ok', `<i class="fa-solid fa-circle-check mr-1"></i>已复制 ${nodes.length} 个节点`);
+    }
+    function cutSelection() {
+      if (!selectedNodeIds.size || !currentDSL) return;
+      copySelection();
+      pushHistory();
+      selectedNodeIds.forEach(id => {
+        const idx = (currentDSL.nodes || []).findIndex(n => n.id === id);
+        if (idx >= 0) deleteLayerNode(idx);
+      });
+      showStatus('ok', `<i class="fa-solid fa-circle-check mr-1"></i>已剪切`);
+    }
+    function pasteClipboard() {
+      if (!clipboard || !clipboard.nodes.length) return;
+      pushHistory();
+      if (!currentDSL) {
+        currentDSL = normalizeDSL({ version: '1.0', layout: 'flow', style: CONFIG.style.theme, nodes: [], edges: [], groups: [], constraints: [] });
+        currentLayout = { nodes: [], edges: [], width: 0, height: 0 };
+      }
+      // 偏移 20px 避免完全重叠
+      const offsetX = 20, offsetY = 20;
+      const idMap = {};
+      selectedNodeIds.clear();
+      clipboard.nodes.forEach(n => {
+        const newId = 'P' + Date.now().toString(36).slice(-5) + Math.floor(Math.random() * 36).toString(36);
+        idMap[n.id] = newId;
+        const newNode = { ...n, id: newId };
+        delete newNode.x; delete newNode.y;
+        currentDSL.nodes.push(newNode);
+        // layout 节点
+        const ln = clipboard.layoutNodes.find(l => l.id === n.id);
+        if (ln) {
+          currentLayout.nodes.push({ ...ln, id: newId, x: ln.x + offsetX, y: ln.y + offsetY, cx: (ln.cx || ln.x) + offsetX, cy: (ln.cy || ln.y) + offsetY });
+        }
+        selectedNodeIds.add(newId);
+      });
+      clipboard.edges.forEach(e => {
+        if (idMap[e.from] && idMap[e.to]) {
+          currentDSL.edges.push({ ...e, from: idMap[e.from], to: idMap[e.to] });
+        }
+      });
+      selectedNodeId = selectedNodeIds.size === 1 ? [...selectedNodeIds][0] : null;
+      const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
+      renderResult(currentLayout, currentDSL);
+      if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
+      updateClipboardButtons();
+      showStatus('ok', `<i class="fa-solid fa-circle-check mr-1"></i>已粘贴 ${clipboard.nodes.length} 个节点`);
+    }
 
     // 重新渲染选中边的拐点 handles
     function refreshWaypoints() {
@@ -692,6 +962,7 @@
       if (currentAST) {
         currentAST.children.push({ type: 'edge', from: fromId, to: toId, style: 'curve' });
       }
+      pushHistory();
       // 重新渲染（保留 viewBox 和选中状态）
       const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
       renderResult(currentLayout, currentDSL);
@@ -815,6 +1086,8 @@
         const astNode = currentAST.children.find(c => c.id === nodeId);
         if (astNode) { astNode.x = x; astNode.y = y; }
       }
+      // 标记本次拖拽的快照已使用（下次拖拽会重新捕获）
+      dragSnapshotTaken = false;
     }
 
     // 节点尺寸调整回调：重新渲染单个节点内容（支持所有形状）
@@ -894,6 +1167,7 @@
         }
       }
       $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
+      pushHistory();
       // 始终重新渲染：文本可能包含富文本（需要 foreignObject）或从富文本变回纯文本
       const svg = $('canvas').querySelector('svg');
       const oldVB = svg ? svg.getAttribute('viewBox') : null;
@@ -1070,7 +1344,7 @@
           onNodeResize: onNodeResize,
           enableSnap: snapEnabled
         });
-        // 节点点击选中（用于删除 + 文字格式工具栏 + 选择框/手柄）
+        // 节点点击选中（支持 Shift/Ctrl 多选 + 框选）
         svgEl.addEventListener('mousedown', e => {
           // 点击调整手柄时不取消选中（手柄自己 stopPropagation 了）
           if (e.target.dataset && e.target.dataset.handle) return;
@@ -1080,16 +1354,45 @@
             if (el.dataset && el.dataset.nodeId) { foundId = el.dataset.nodeId; break; }
             el = el.parentNode;
           }
-          selectedNodeId = foundId;
-          $('tool-delete').disabled = !foundId;
-          showTextToolbar(foundId);
-          // 显示选择框和调整手柄
-          if (foundId && currentSVGEeditor) {
-            currentSVGEeditor.showNodeSelection(foundId);
-          } else if (currentSVGEeditor) {
-            currentSVGEeditor.hideNodeSelection();
+          const multi = e.shiftKey || e.ctrlKey || e.metaKey;
+          if (foundId) {
+            if (multi) {
+              // 多选切换
+              if (selectedNodeIds.has(foundId)) selectedNodeIds.delete(foundId);
+              else selectedNodeIds.add(foundId);
+              // 单选主节点：取第一个
+              selectedNodeId = selectedNodeIds.size === 1 ? [...selectedNodeIds][0] : (selectedNodeIds.size ? selectedNodeId : null);
+            } else {
+              selectedNodeIds.clear();
+              selectedNodeIds.add(foundId);
+              selectedNodeId = foundId;
+            }
+            $('tool-delete').disabled = false;
+            updateClipboardButtons();
+            showTextToolbar(selectedNodeIds.size === 1 ? foundId : null);
+            // 单选时显示选择框手柄；多选时只显示高亮框
+            if (selectedNodeIds.size === 1 && currentSVGEeditor) {
+              currentSVGEeditor.showNodeSelection(foundId);
+            } else if (currentSVGEeditor) {
+              currentSVGEeditor.hideNodeSelection();
+            }
+            refreshMultiSelection();
+          } else if (!multi) {
+            // 空白处单击：清除选中 + 启动框选
+            selectedNodeIds.clear();
+            selectedNodeId = null;
+            $('tool-delete').disabled = true;
+            updateClipboardButtons();
+            showTextToolbar(null);
+            if (currentSVGEeditor) currentSVGEeditor.hideNodeSelection();
+            refreshMultiSelection();
+            if (selectMode === 'select' && currentSVGEeditor) {
+              startMarqueeSelect(svgEl, e);
+            }
           }
         });
+        // 节点交互开始（resize/rotate 拖拽开始前）：保存历史快照
+        svgEl.addEventListener('node-interaction-start', () => { pushHistory(); });
         // 节点尺寸调整（由 svg-editor 的手柄拖拽派发）
         svgEl.addEventListener('node-resized', e => {
           const { id, x, y, width, height } = e.detail;
@@ -1145,6 +1448,8 @@
         // 拖拽过程中实时更新关联边（node-moved 事件由 svg-editor 在 mousemove 时派发）
         svgEl.addEventListener('node-moved', e => {
           const { id, x, y } = e.detail;
+          // 拖拽首次移动前保存历史快照（用于撤销）
+          if (!dragSnapshotTaken) { pushHistory(); dragSnapshotTaken = true; }
           // 更新 layout 节点坐标（不触发 AST 同步，mouseup 时由 onNodeDrag 完成）
           const node = (currentLayout?.nodes || []).find(n => n.id === id);
           if (node) {
@@ -1177,6 +1482,10 @@
       $('dsl-score').textContent = `约束满足度: ${(cs * 100).toFixed(0)}%`;
       // 刷新图层列表
       refreshLayerList();
+      // 恢复选择模式状态（新 editor 实例需重新设置）
+      if (currentSVGEeditor) currentSVGEeditor.setPanMode(selectMode === 'pan');
+      updateUndoRedoButtons();
+      updateClipboardButtons();
     }
 
     // 主流程：生成
@@ -1276,6 +1585,7 @@
         // 渲染（统一走 dagre 引擎）
         {
           const layout = layoutWithDagre(norm);
+          pushHistory();
           renderResult(layout, norm);
           // 单轮模式也生成 Critic 评分
           if (!feedback) {
@@ -1415,6 +1725,7 @@
       if (selectedEdgeIdx === null || !currentLayout) return;
       const edge = currentLayout.edges[selectedEdgeIdx];
       if (!edge) return;
+      pushHistory();
       edge.style = 'curve';
       // 移除中间拐点（曲线不需要）
       if (edge.points && edge.points.length > 2) {
@@ -1442,6 +1753,7 @@
       if (selectedEdgeIdx === null || !currentLayout) return;
       const edge = currentLayout.edges[selectedEdgeIdx];
       if (!edge) return;
+      pushHistory();
       edge.style = 'line';
       if (currentDSL) {
         const dslEdge = (currentDSL.edges || [])[selectedEdgeIdx];
@@ -1463,6 +1775,7 @@
     // 边编辑：删除选中的边
     $('edge-delete').addEventListener('click', () => {
       if (selectedEdgeIdx === null || !currentLayout) return;
+      pushHistory();
       const idx = selectedEdgeIdx;
       // 从 SVG 移除
       const svg = $('canvas').querySelector('svg');
@@ -1498,7 +1811,17 @@
 
     // 删除选中节点（直接操作 SVG + DSL + layout + AST）
     $('tool-delete').addEventListener('click', () => {
+      // 支持多选删除
+      if (selectedNodeIds.size > 1) {
+        pushHistory();
+        [...selectedNodeIds].forEach(id => {
+          const idx = (currentDSL.nodes || []).findIndex(n => n.id === id);
+          if (idx >= 0) deleteLayerNode(idx);
+        });
+        return;
+      }
       if (!selectedNodeId) return;
+      pushHistory();
       const id = selectedNodeId;
       // 从 SVG 移除
       const svg = $('canvas').querySelector('svg');
@@ -1750,6 +2073,7 @@
         width: size.width, height: size.height,
         text: '新节点', component: draggedComponent
       });
+      pushHistory();
       // 保留 viewBox
       const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
       renderResult(currentLayout, currentDSL);
@@ -1803,6 +2127,7 @@
           currentDSL.nodes.push({ id, text: '', component: 'image', imageSrc: dataUrl });
           if (!currentLayout) currentLayout = { nodes: [], edges: [], width: 0, height: 0 };
           currentLayout.nodes.push({ id, x: cx - w / 2, y: cy - h / 2, width: w, height: h, text: '', component: 'image', imageSrc: dataUrl });
+          pushHistory();
           const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
           renderResult(currentLayout, currentDSL);
           if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
@@ -1813,6 +2138,81 @@
       };
       reader.readAsDataURL(file);
       e.target.value = '';
+    });
+
+    // ===== 清空画布 =====
+    $('tool-clear').addEventListener('click', async () => {
+      if (!currentDSL && !currentLayout) return;
+      const ok = await cgConfirm('清空画布', '确定要清空当前画布的所有内容吗？此操作可通过撤销恢复。', '清空', '取消', true);
+      if (!ok) return;
+      pushHistory();
+      currentDSL = normalizeDSL({ version: '1.0', layout: 'flow', style: CONFIG.style.theme, nodes: [], edges: [], groups: [], constraints: [] });
+      currentLayout = { nodes: [], edges: [], width: 0, height: 0 };
+      currentAST = buildAST(currentDSL, currentLayout, { darkMode: CONFIG.style.darkMode, rankdir: CONFIG.layout.rankdir });
+      currentMermaidCode = null;
+      selectedNodeId = null;
+      selectedNodeIds.clear();
+      selectedEdgeIdx = null;
+      clipboard = null;
+      const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
+      renderResult(currentLayout, currentDSL);
+      if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
+      updateClipboardButtons();
+      $('dsl-panel').classList.add('hidden');
+      $('score-panel').classList.add('hidden');
+      showStatus('ok', `<i class="fa-solid fa-circle-check mr-1"></i>画布已清空（Ctrl+Z 可撤销）`);
+    });
+
+    // ===== 撤销/重做按钮 =====
+    $('tool-undo').addEventListener('click', () => undo());
+    $('tool-redo').addEventListener('click', () => redo());
+
+    // ===== 复制/剪贴/粘贴按钮 =====
+    $('tool-copy').addEventListener('click', () => copySelection());
+    $('tool-cut').addEventListener('click', () => cutSelection());
+    $('tool-paste').addEventListener('click', () => pasteClipboard());
+
+    // ===== 选择/平移模式切换 =====
+    function setSelectMode(mode) {
+      selectMode = mode;
+      const selBtn = $('mode-select'), panBtn = $('mode-pan');
+      if (mode === 'select') {
+        selBtn.classList.add('bg-primary', 'text-white');
+        selBtn.classList.remove('hover:bg-slate-100', 'dark:hover:bg-slate-800');
+        panBtn.classList.remove('bg-primary', 'text-white');
+        panBtn.classList.add('hover:bg-slate-100', 'dark:hover:bg-slate-800');
+      } else {
+        panBtn.classList.add('bg-primary', 'text-white');
+        panBtn.classList.remove('hover:bg-slate-100', 'dark:hover:bg-slate-800');
+        selBtn.classList.remove('bg-primary', 'text-white');
+        selBtn.classList.add('hover:bg-slate-100', 'dark:hover:bg-slate-800');
+      }
+      if (currentSVGEeditor) currentSVGEeditor.setPanMode(mode === 'pan');
+    }
+    $('mode-select').addEventListener('click', () => setSelectMode('select'));
+    $('mode-pan').addEventListener('click', () => setSelectMode('pan'));
+
+    // ===== 键盘快捷键 =====
+    document.addEventListener('keydown', e => {
+      // 文本输入框中不触发
+      const tag = (e.target.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || e.target.isContentEditable) return;
+      const ctrl = e.ctrlKey || e.metaKey;
+      if (ctrl && e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if ((ctrl && e.key.toLowerCase() === 'y') || (ctrl && e.shiftKey && e.key.toLowerCase() === 'z')) { e.preventDefault(); redo(); }
+      else if (ctrl && e.key.toLowerCase() === 'c') { e.preventDefault(); if (!$('tool-copy').disabled) copySelection(); }
+      else if (ctrl && e.key.toLowerCase() === 'x') { e.preventDefault(); if (!$('tool-cut').disabled) cutSelection(); }
+      else if (ctrl && e.key.toLowerCase() === 'v') { e.preventDefault(); if (!$('tool-paste').disabled) pasteClipboard(); }
+      else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedNodeIds.size > 0 && !$('tool-delete').disabled) { e.preventDefault(); pushHistory(); [...selectedNodeIds].forEach(id => { const idx = (currentDSL.nodes || []).findIndex(n => n.id === id); if (idx >= 0) deleteLayerNode(idx); }); }
+      } else if (e.key === 'Escape') {
+        selectedNodeIds.clear();
+        selectedNodeId = null;
+        $('tool-delete').disabled = true;
+        updateClipboardButtons();
+        if (currentSVGEeditor) currentSVGEeditor.hideNodeSelection();
+        refreshMultiSelection();
+      }
     });
 
     // ===== 图层管理功能 =====
@@ -1860,6 +2260,7 @@
       if (!node) return;
 
       if (btn.classList.contains('layer-vis')) {
+        pushHistory();
         node.hidden = !node.hidden;
         // 同步 layout
         const ln = (currentLayout?.nodes || []).find(n => n.id === node.id);
@@ -1869,12 +2270,12 @@
         if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
       } else if (btn.classList.contains('layer-up')) {
         if (idx >= nodes.length - 1) return;
-        swapNodes(idx, idx + 1);
+        pushHistory(); swapNodes(idx, idx + 1);
       } else if (btn.classList.contains('layer-down')) {
         if (idx <= 0) return;
-        swapNodes(idx, idx - 1);
+        pushHistory(); swapNodes(idx, idx - 1);
       } else if (btn.classList.contains('layer-del')) {
-        deleteLayerNode(idx);
+        pushHistory(); deleteLayerNode(idx);
       } else if (btn.classList.contains('layer-select')) {
         selectLayerNode(id);
       }
@@ -1927,6 +2328,8 @@
         $('tool-delete').disabled = true;
         if (currentSVGEeditor) currentSVGEeditor.hideNodeSelection();
       }
+      selectedNodeIds.delete(id);
+      updateClipboardButtons();
       const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
       renderResult(currentLayout, currentDSL);
       if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);

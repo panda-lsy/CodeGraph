@@ -136,6 +136,7 @@ export function initSVGEditor(svg, options = {}) {
   const onEdgeUpdateWaypointCb = options.onEdgeUpdateWaypoint || null;
   onNodeResizeCb = options.onNodeResize || null;
   let enableSnap = options.enableSnap !== false;
+  let panMode = false; // 手型平移模式：点击节点也平移而非拖拽
 
   let scale = 1, panX = 0, panY = 0;
   let vb = getViewBox(svgEl) || { x: 0, y: 0, w: 600, h: 400 };
@@ -216,8 +217,8 @@ export function initSVGEditor(svg, options = {}) {
       return;
     }
 
-    // 节点拖拽
-    if (nodeId) {
+    // 节点拖拽（平移模式下跳过，走空白平移逻辑）
+    if (nodeId && !panMode) {
       const nodeEl = svgEl.querySelector(`[data-node-id="${nodeId}"]`);
       if (!nodeEl) return;
       const rect = getNodeRect(nodeEl);
@@ -543,6 +544,7 @@ export function initSVGEditor(svg, options = {}) {
   }
 
   function startResize(handle, rect, e) {
+    svgEl.dispatchEvent(new CustomEvent('node-interaction-start', { detail: { id: selectedNodeIdForResize } }));
     resizing = {
       handle,
       startClientX: e.clientX, startClientY: e.clientY,
@@ -554,6 +556,7 @@ export function initSVGEditor(svg, options = {}) {
   }
 
   function startRotation(rect, e) {
+    svgEl.dispatchEvent(new CustomEvent('node-interaction-start', { detail: { id: selectedNodeIdForResize } }));
     const cx = rect.x + rect.width / 2;
     const cy = rect.y + rect.height / 2;
     // 将节点中心转换为屏幕坐标
@@ -800,6 +803,7 @@ export function initSVGEditor(svg, options = {}) {
     setConnectMode(on) { setConnectMode(on); },
     isConnectMode() { return connectMode; },
     setSnap(on) { enableSnap = on; },
+    setPanMode(on) { panMode = !!on; svgEl.style.cursor = panMode ? 'grab' : ''; },
     clearSelection() {
       if (selectedEdgeId) selectEdge(null);
       if (connectFromId) { highlightNode(connectFromId, false); connectFromId = null; }
