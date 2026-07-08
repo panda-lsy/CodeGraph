@@ -92,12 +92,13 @@ export function layoutWithDagre(dsl) {
   const edges = g.edges().map(({ v, w }) => {
     const edgeObj = g.edge(v, w);
     const points = (edgeObj.points || []).map(p => ({ x: p.x, y: p.y }));
-    // 保留 DSL 中边的 style（curve/line）、dashed、label
+    // 保留 DSL 中边的 style（curve/line）、dashed、label、labelWpIdx
     const dslEdge = (dsl.edges || []).find(e => e.from === v && e.to === w);
     const style = dslEdge?.style || 'line';
     const dashed = dslEdge?.dashed || false;
     const label = dslEdge?.label || '';
-    return { from: v, to: w, points, style, dashed, label };
+    const labelWpIdx = dslEdge?.labelWpIdx != null ? dslEdge.labelWpIdx : null;
+    return { from: v, to: w, points, style, dashed, label, labelWpIdx };
   });
 
   const graph = g.graph();
@@ -142,8 +143,10 @@ export function dslToMermaid(dsl) {
   });
 
   (dsl.edges || []).forEach(e => {
-    const arrow = e.style === 'curve' ? '-.->' : '-->';
-    lines.push(`  ${e.from} ${arrow} ${e.to}`);
+    // 虚线用 -.->，实线用 -->（curve/line 在 Mermaid 中不区分，均为曲线渲染）
+    const arrow = e.dashed ? '-.->' : '-->';
+    const label = e.label ? `|${e.label}|` : '';
+    lines.push(`  ${e.from} ${arrow}${label} ${e.to}`);
   });
 
   (dsl.groups || []).forEach((g, i) => {
@@ -269,15 +272,17 @@ export function mermaidToDSL(code) {
 
     // 检测是否含边箭头（支持 Mermaid 多种箭头语法 + 边标签）
     // 边标签预处理：A -->|text| B → A --> B (label)
+    //               A -.->|text| B → A -.-> B (label)
     //               A -. text .-> B → A -.-> B (label)
     //               A -- text --> B → A --> B (label)
     let pendingLabels = [];
     let work = line
       .replace(/-->\|([^|]*)\|/g, (m, l) => { pendingLabels.push(l); return '-->'; })
+      .replace(/-\.\->\|([^|]*)\|/g, (m, l) => { pendingLabels.push(l); return '-.->'; })
       .replace(/==>\|([^|]*)\|/g, (m, l) => { pendingLabels.push(l); return '==>'; })
+      .replace(/<-->\|([^|]*)\|/g, (m, l) => { pendingLabels.push(l); return '<-->'; })
       .replace(/-\.\s+([^-.]+?)\s+\.->/g, (m, l) => { pendingLabels.push(l); return '-.->'; })
-      .replace(/--\s+([^-]+?)\s+-->/g, (m, l) => { pendingLabels.push(l); return '-->'; })
-      .replace(/<-->\|([^|]*)\|/g, (m, l) => { pendingLabels.push(l); return '<-->'; });
+      .replace(/--\s+([^-]+?)\s+-->/g, (m, l) => { pendingLabels.push(l); return '-->'; });
 
     // 箭头种类：双向 <-->、粗实线 ==>、虚线 -.->、实线 -->、无箭头 ---、圆点 o--o、叉 x--x、双线 ===
     const arrowRe = /<-->|==>|-->|<-\.->|-\.->|---|o--o|x--x|===|==/;

@@ -170,7 +170,7 @@ function renderEdge(edge, theme, nodeMap) {
   let d;
 
   if (style === 'curve') {
-    // 曲线模式：用三次贝塞尔曲线平滑连接所有点（含拐点）
+    // 曲线模式：用 Catmull-Rom 样条转贝塞尔曲线，确保精确经过每个拐点
     if (all.length === 2) {
       // 仅两点：直接贝塞尔
       const dx = end.x - start.x;
@@ -184,15 +184,22 @@ function renderEdge(edge, theme, nodeMap) {
       const c2y = start.y + dy * 0.7 + (isHorizontal ? offset * 0.3 : 0);
       d = `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${end.x.toFixed(1)} ${end.y.toFixed(1)}`;
     } else {
-      // 多点（含拐点）：用 S 命令平滑连接，每段贝塞尔
-      const dx0 = all[1].x - all[0].x;
-      const dy0 = all[1].y - all[0].y;
-      const dist0 = Math.sqrt(dx0 * dx0 + dy0 * dy0);
-      const c1x = all[0].x + dx0 * 0.3;
-      const c1y = all[0].y + dy0 * 0.3;
-      d = `M ${all[0].x.toFixed(1)} ${all[0].y.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${all[1].x.toFixed(1)} ${all[1].y.toFixed(1)}, ${all[1].x.toFixed(1)} ${all[1].y.toFixed(1)}`;
-      for (let i = 1; i < all.length - 1; i++) {
-        d += ` S ${all[i].x.toFixed(1)} ${all[i].y.toFixed(1)}, ${all[i + 1].x.toFixed(1)} ${all[i + 1].y.toFixed(1)}`;
+      // 多点：Catmull-Rom 样条 → 三次贝塞尔（曲线精确经过每个拐点）
+      // 对每段 P[i]→P[i+1]，控制点为：
+      //   c1 = P[i] + (P[i+1] - P[i-1]) / 6
+      //   c2 = P[i+1] - (P[i+2] - P[i]) / 6
+      // 端点处用虚拟点（复制端点）保证边界平滑
+      d = `M ${all[0].x.toFixed(1)} ${all[0].y.toFixed(1)}`;
+      for (let i = 0; i < all.length - 1; i++) {
+        const p0 = i > 0 ? all[i - 1] : all[i];
+        const p1 = all[i];
+        const p2 = all[i + 1];
+        const p3 = i + 2 < all.length ? all[i + 2] : all[i + 1];
+        const c1x = p1.x + (p2.x - p0.x) / 6;
+        const c1y = p1.y + (p2.y - p0.y) / 6;
+        const c2x = p2.x - (p3.x - p1.x) / 6;
+        const c2y = p2.y - (p3.y - p1.y) / 6;
+        d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
       }
     }
   } else {
@@ -202,15 +209,22 @@ function renderEdge(edge, theme, nodeMap) {
 
   // 虚线样式
   const strokeDasharray = edge.dashed ? '6 4' : 'none';
-  // 边标签（线上文本）
+  // 边标签（拐点文字）：放在 labelWpIdx 指定的拐点位置，无指定则用第一个拐点或路径中点
   let labelSVG = '';
   if (edge.label) {
-    // 计算标签位置：路径中点（取 all 数组中间点）
-    const midIdx = Math.floor(all.length / 2);
-    const labelPos = midIdx >= all.length ? all[all.length - 1] : all[midIdx];
+    let labelPos;
+    if (mid.length > 0) {
+      // labelWpIdx 是边内部点索引（1-based，对应 mid 数组的 0-based）
+      const wpIdx = edge.labelWpIdx != null ? edge.labelWpIdx : 1;
+      const midIdx = wpIdx - 1;
+      labelPos = midIdx >= 0 && midIdx < mid.length ? mid[midIdx] : mid[0];
+    } else {
+      labelPos = all[Math.floor(all.length / 2)];
+    }
     const labelText = escapeXML(edge.label);
-    labelSVG = `<rect x="${(labelPos.x - labelText.length * 3.5).toFixed(1)}" y="${(labelPos.y - 9).toFixed(1)}" width="${(labelText.length * 7).toFixed(1)}" height="18" fill="${theme.bg || '#fff'}" opacity="0.9" rx="2"/>
-    <text x="${labelPos.x.toFixed(1)}" y="${(labelPos.y + 4).toFixed(1)}" text-anchor="middle" font-family="${theme.fontFamily}" font-size="12" fill="${theme.edgeColor}">${labelText}</text>`;
+    const labelWidth = edge.label.length * 7;
+    labelSVG = `<rect class="cg-edge-label-bg" x="${(labelPos.x - labelWidth / 2).toFixed(1)}" y="${(labelPos.y - 9).toFixed(1)}" width="${labelWidth.toFixed(1)}" height="18" fill="${theme.bg || '#fff'}" opacity="0.9" rx="2"/>
+    <text class="cg-edge-label" x="${labelPos.x.toFixed(1)}" y="${(labelPos.y + 4).toFixed(1)}" text-anchor="middle" font-family="${theme.fontFamily}" font-size="12" fill="${theme.edgeColor}">${labelText}</text>`;
   }
 
   return `
@@ -325,8 +339,8 @@ export function layoutToSVG(layout, dsl, options = {}) {
   ${bgRect}
   ${gridRect}
   ${groupsSVG}
-  ${edgesSVG}
   ${nodesSVG}
+  ${edgesSVG}
 </svg>`;
 }
 
@@ -392,19 +406,23 @@ export function recalcEdgePath(layout, edge) {
   if (fromRot) start = rotatePoint(start.x, start.y, fromCx, fromCy, fromRot);
   if (toRot) end = rotatePoint(end.x, end.y, toCx, toCy, toRot);
 
-  const style = edge.style || 'curve';
+  const style = edge.style || 'line';
   // 有拐点时：曲线用 S 命令平滑连接，折线用 L 连接
   if (midPoints.length > 0) {
     const all = [start, ...midPoints, end];
     if (style === 'curve') {
-      // 曲线模式：用 S 命令平滑连接所有拐点
-      const dx0 = all[1].x - all[0].x;
-      const dy0 = all[1].y - all[0].y;
-      const c1x = all[0].x + dx0 * 0.3;
-      const c1y = all[0].y + dy0 * 0.3;
-      let path = `M ${all[0].x.toFixed(1)} ${all[0].y.toFixed(1)} C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${all[1].x.toFixed(1)} ${all[1].y.toFixed(1)}, ${all[1].x.toFixed(1)} ${all[1].y.toFixed(1)}`;
-      for (let i = 1; i < all.length - 1; i++) {
-        path += ` S ${all[i].x.toFixed(1)} ${all[i].y.toFixed(1)}, ${all[i + 1].x.toFixed(1)} ${all[i + 1].y.toFixed(1)}`;
+      // 曲线模式：Catmull-Rom 样条转贝塞尔，精确经过每个拐点
+      let path = `M ${all[0].x.toFixed(1)} ${all[0].y.toFixed(1)}`;
+      for (let i = 0; i < all.length - 1; i++) {
+        const p0 = i > 0 ? all[i - 1] : all[i];
+        const p1 = all[i];
+        const p2 = all[i + 1];
+        const p3 = i + 2 < all.length ? all[i + 2] : all[i + 1];
+        const c1x = p1.x + (p2.x - p0.x) / 6;
+        const c1y = p1.y + (p2.y - p0.y) / 6;
+        const c2x = p2.x - (p3.x - p1.x) / 6;
+        const c2y = p2.y - (p3.y - p1.y) / 6;
+        path += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ${c2x.toFixed(1)} ${c2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
       }
       return path;
     }

@@ -249,6 +249,7 @@ export function initSVGEditor(svg, options = {}) {
 
     // 拐点拖拽
     if (isWaypoint) {
+      selectWaypoint(target);
       draggingWaypoint = {
         edgeId: target.dataset.edgeId,
         wpIdx: parseInt(target.dataset.wpIdx)
@@ -258,6 +259,9 @@ export function initSVGEditor(svg, options = {}) {
       e.stopPropagation();
       return;
     }
+
+    // 点击非拐点元素时取消拐点选中
+    if (selectedWaypointIdx !== null) selectWaypoint(null);
 
     // 节点拖拽（平移模式下跳过，走空白平移逻辑）
     if (nodeId && !panMode) {
@@ -341,6 +345,28 @@ export function initSVGEditor(svg, options = {}) {
   let dragNodeSize = { width: 100, height: 50 };
   let draggingWaypoint = null;
   let draggingGroup = null; // {id, startClientX/Y, origX/Y/W/H, members:[{id,el,origX,origY}]}
+  let selectedWaypointIdx = null; // 当前选中的拐点索引（wpIdx）
+
+  // 选中拐点（视觉高亮 + 记录索引）
+  function selectWaypoint(circleEl) {
+    svgEl.querySelectorAll('.cg-waypoint').forEach(el => {
+      el.setAttribute('fill', '#fff');
+      el.setAttribute('stroke', '#6366f1');
+      el.setAttribute('stroke-width', '2');
+      el.classList.remove('selected');
+    });
+    if (circleEl) {
+      circleEl.setAttribute('fill', '#6366f1');
+      circleEl.setAttribute('stroke', '#fff');
+      circleEl.setAttribute('stroke-width', '3');
+      circleEl.classList.add('selected');
+      selectedWaypointIdx = parseInt(circleEl.dataset.wpIdx);
+    } else {
+      selectedWaypointIdx = null;
+    }
+    // 派发事件通知外部（用于刷新工具栏 placeholder）
+    svgEl.dispatchEvent(new CustomEvent('waypoint-select', { detail: { wpIdx: selectedWaypointIdx } }));
+  }
 
   const onMouseMove = e => {
     if (isPanning) {
@@ -1389,6 +1415,7 @@ export function initSVGEditor(svg, options = {}) {
     isConnectMode() { return connectMode; },
     setSnap(on) { enableSnap = on; },
     setPanMode(on) { panMode = !!on; svgEl.style.cursor = panMode ? 'grab' : ''; },
+    selectEdge(edgeId) { selectEdge(edgeId); },
     clearSelection() {
       if (selectedEdgeId) selectEdge(null);
       if (connectFromId) { highlightNode(connectFromId, false); connectFromId = null; }
@@ -1423,10 +1450,19 @@ export function initSVGEditor(svg, options = {}) {
         });
         svgEl.appendChild(circle);
       });
+      // 恢复选中态（索引仍有效时）
+      if (selectedWaypointIdx !== null && selectedWaypointIdx < points.length) {
+        const sel = svgEl.querySelector(`.cg-waypoint[data-wp-idx="${selectedWaypointIdx}"]`);
+        if (sel) selectWaypoint(sel);
+        else selectedWaypointIdx = null;
+      }
     },
     clearWaypoints() {
       svgEl.querySelectorAll('.cg-waypoint').forEach(el => el.remove());
+      selectedWaypointIdx = null;
     },
+    getSelectedWaypoint() { return selectedWaypointIdx; },
+    clearWaypointSelection() { selectWaypoint(null); },
     tagEdges() {
       const edges = svgEl.querySelectorAll('.cg-edge');
       edges.forEach((el, i) => { el.dataset.edgeId = String(i); });

@@ -140,6 +140,32 @@
       border: 1px solid rgba(0,0,0,0.15);
     }
     .cg-text-toolbar .tb-palette .swatch.active { box-shadow: 0 0 0 2px #6366f1; }
+    /* 边编辑弹出工具栏（选中边时显示） */
+    .cg-edge-toolbar {
+      display: none; padding: 6px 12px; gap: 6px;
+      flex-wrap: wrap; align-items: center;
+      border-bottom: 1px solid #e2e8f0; background: #f8fafc;
+    }
+    .cg-edge-toolbar.active { display: flex; }
+    .dark .cg-edge-toolbar { background: #0f172a; border-bottom-color: #334155; }
+    .cg-edge-toolbar .tb-btn {
+      width: auto; min-width: 26px; height: 26px; padding: 0 6px; display: flex; align-items: center; justify-content: center;
+      border: 1px solid transparent; border-radius: 4px; cursor: pointer; font-size: 12px;
+      color: #475569; background: transparent; transition: 0.15s;
+    }
+    .cg-edge-toolbar .tb-btn:hover:not(:disabled) { background: #f1f5f9; }
+    .cg-edge-toolbar .tb-btn.active { background: #6366f1; color: #fff; }
+    .cg-edge-toolbar .tb-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .dark .cg-edge-toolbar .tb-btn { color: #94a3b8; }
+    .dark .cg-edge-toolbar .tb-btn:hover:not(:disabled) { background: #334155; }
+    .dark .cg-edge-toolbar .tb-btn.active { background: #818cf8; color: #fff; }
+    .cg-edge-toolbar .tb-sep { width: 1px; height: 20px; background: #e2e8f0; margin: 0 2px; }
+    .dark .cg-edge-toolbar .tb-sep { background: #475569; }
+    .cg-edge-toolbar input[type="text"] {
+      font-size: 11px; padding: 2px 6px; border: 1px solid #cbd5e1; border-radius: 4px;
+      background: #fff; color: #334155; width: 120px;
+    }
+    .dark .cg-edge-toolbar input[type="text"] { background: #0f172a; color: #e2e8f0; border-color: #475569; }
     /* KaTeX 错误提示（节点内联） */
     .cg-tex-error { color: #dc2626; background: #fef2f2; padding: 1px 4px; border-radius: 3px; border: 1px solid #fecaca; font-family: monospace; }
     .dark .cg-tex-error { color: #fca5a5; background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.3); }
@@ -458,6 +484,21 @@
           <div class="tb-palette" id="tb-palette"></div>
           <input type="color" id="tb-color" value="#1e293b" title="自定义颜色" style="width:24px;height:24px;padding:0;border:none;cursor:pointer;background:transparent;">
         </div>
+        <!-- 线段编辑工具栏（选中边时显示，弹出样式） -->
+        <div id="edge-toolbar" class="cg-edge-toolbar">
+          <span class="text-[10px] text-slate-400 mr-1">线段设置</span>
+          <button class="tb-btn" id="edge-curve" title="曲线"><i class="fa-solid fa-bezier-curve"></i></button>
+          <button class="tb-btn" id="edge-line" title="直线"><i class="fa-solid fa-minus"></i></button>
+          <div class="tb-sep"></div>
+          <button class="tb-btn" id="edge-add-waypoint" title="添加拐点（在边中点插入）"><i class="fa-solid fa-circle-plus"></i></button>
+          <button class="tb-btn" id="edge-del-waypoint" title="删除选中的拐点"><i class="fa-solid fa-circle-minus"></i></button>
+          <div class="tb-sep"></div>
+          <button class="tb-btn" id="edge-dashed" title="虚线/实线"><i class="fa-solid fa-grip-lines"></i></button>
+          <div class="tb-sep"></div>
+          <input type="text" id="edge-label" placeholder="拐点文字..." title="拐点文字标签（跟随第一个拐点移动）" />
+          <div class="tb-sep"></div>
+          <button class="tb-btn" id="edge-delete" title="删除选中的边" style="color:#dc2626"><i class="fa-solid fa-trash"></i></button>
+        </div>
         <!-- 画布（占满剩余高度，直接可交互） -->
         <div id="canvas" class="cg-canvas flex-1 min-h-0 relative overflow-hidden">
           <div class="text-center text-slate-400 dark:text-slate-500 absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
@@ -486,24 +527,6 @@
           <span class="opacity-40">·</span>
           <span><i class="fa-solid fa-magnifying-glass mr-1"></i>滚轮缩放</span>
           <div class="flex-1"></div>
-          <button id="edge-curve" class="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50" disabled title="切换为曲线">
-            <i class="fa-solid fa-bezier-curve mr-1"></i>曲线
-          </button>
-          <button id="edge-line" class="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50" disabled title="切换为直线">
-            <i class="fa-solid fa-minus mr-1"></i>直线
-          </button>
-          <button id="edge-add-waypoint" class="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50" disabled title="添加拐点（在边中点插入）">
-            <i class="fa-solid fa-circle-plus mr-1"></i>拐点
-          </button>
-          <button id="edge-del-waypoint" class="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50" disabled title="删除最后一个拐点">
-            <i class="fa-solid fa-circle-minus mr-1"></i>删拐点
-          </button>
-          <button id="edge-dashed" class="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50" disabled title="切换虚线/实线">
-            <i class="fa-solid fa-grip-lines mr-1"></i>虚线
-          </button>
-          <button id="edge-delete" class="px-2.5 py-1 rounded border border-red-300 dark:border-red-800 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition disabled:opacity-50" disabled title="删除选中的边">
-            <i class="fa-solid fa-trash mr-1"></i>删除边
-          </button>
           <button id="tool-delete" class="px-2.5 py-1 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50" disabled>
             <i class="fa-solid fa-trash mr-1"></i>删除选中
           </button>
@@ -993,24 +1016,38 @@
     function onEdgeSelect(edgeId) {
       if (edgeId === null) {
         selectedEdgeIdx = null;
-        $('edge-curve').disabled = true;
-        $('edge-line').disabled = true;
-        $('edge-add-waypoint').disabled = true;
-        $('edge-del-waypoint').disabled = true;
-        $('edge-dashed').disabled = true;
-        $('edge-delete').disabled = true;
+        $('edge-toolbar').classList.remove('active');
         if (currentSVGEeditor) currentSVGEeditor.clearWaypoints();
         return;
       }
       selectedEdgeIdx = parseInt(edgeId);
-      $('edge-curve').disabled = false;
-      $('edge-line').disabled = false;
-      $('edge-add-waypoint').disabled = false;
-      $('edge-del-waypoint').disabled = false;
-      $('edge-dashed').disabled = false;
-      $('edge-delete').disabled = false;
+      showEdgeToolbar(selectedEdgeIdx);
       refreshWaypoints();
     }
+
+    // 显示线段编辑工具栏并同步按钮状态
+    function showEdgeToolbar(edgeIdx) {
+      const tb = $('edge-toolbar');
+      if (edgeIdx === null || !currentLayout) { tb.classList.remove('active'); return; }
+      const edge = currentLayout.edges[edgeIdx];
+      if (!edge) { tb.classList.remove('active'); return; }
+      tb.classList.add('active');
+      $('edge-curve').classList.toggle('active', (edge.style || 'line') === 'curve');
+      $('edge-line').classList.toggle('active', (edge.style || 'line') !== 'curve');
+      $('edge-dashed').classList.toggle('active', !!edge.dashed);
+      $('edge-label').value = edge.label || '';
+      // 提示当前 label 绑定的拐点
+      const selWp = currentSVGEeditor ? currentSVGEeditor.getSelectedWaypoint() : null;
+      if (selWp !== null) {
+        $('edge-label').placeholder = `拐点${selWp}文字...`;
+      } else if (edge.labelWpIdx != null) {
+        $('edge-label').placeholder = `拐点${edge.labelWpIdx}文字...`;
+      } else {
+        $('edge-label').placeholder = '拐点文字（选中拐点后绑定）...';
+      }
+    }
+    // 阻止工具栏上的 mousedown 冒泡到 canvas（避免取消选中）
+    $('edge-toolbar').addEventListener('mousedown', e => e.stopPropagation());
 
     // 创建边回调（连接模式）
     function onEdgeCreate(fromId, toId) {
@@ -1044,7 +1081,7 @@
       showStatus('ok', `<i class="fa-solid fa-link mr-1"></i>已创建边 ${fromId} → ${toId}`);
     }
 
-    // 添加拐点回调
+    // 添加拐点回调（双击边添加拐点）
     function onEdgeAddWaypoint(edgeId, x, y) {
       if (!currentLayout) return;
       const idx = parseInt(edgeId);
@@ -1053,7 +1090,7 @@
       edge.points = edge.points || [];
       // 在末尾（终点前）插入拐点
       edge.points.splice(edge.points.length - 1, 0, { x, y });
-      edge.style = 'line'; // 有拐点时用折线
+      // 保留当前 style（曲线/直线），不强制改为折线
       // 重新渲染该边
       const svg = $('canvas').querySelector('svg');
       if (svg) {
@@ -1095,6 +1132,23 @@
         if (handle) {
           handle.setAttribute('cx', x);
           handle.setAttribute('cy', y);
+        }
+        // 拐点文字跟随绑定的拐点移动（labelWpIdx 指定）
+        if (edge.label && wpIdx === (edge.labelWpIdx != null ? edge.labelWpIdx : 1)) {
+          const edgeEl = svg.querySelectorAll('.cg-edge')[idx];
+          if (edgeEl) {
+            const labelBg = edgeEl.querySelector('.cg-edge-label-bg');
+            const labelText = edgeEl.querySelector('.cg-edge-label');
+            const labelWidth = edge.label.length * 7;
+            if (labelBg) {
+              labelBg.setAttribute('x', (x - labelWidth / 2).toFixed(1));
+              labelBg.setAttribute('y', (y - 9).toFixed(1));
+            }
+            if (labelText) {
+              labelText.setAttribute('x', x.toFixed(1));
+              labelText.setAttribute('y', (y + 4).toFixed(1));
+            }
+          }
         }
       }
     }
@@ -1499,6 +1553,8 @@
     function renderResult(layout, dsl) {
       currentLayout = layout;
       currentDSL = dsl;
+      // 重新渲染时隐藏线段工具栏（选中态丢失）
+      $('edge-toolbar').classList.remove('active');
       const svgStr = layoutToSVG(layout, dsl, {
         darkMode: CONFIG.style.darkMode,
         width: CONFIG.style.canvasWidth || null,
@@ -1707,6 +1763,28 @@
             currentSVGEeditor.showNodeSelection(id);
           }
         });
+        // 双击拐点删除
+        svgEl.addEventListener('waypoint-remove', e => {
+          const { edgeId, wpIdx } = e.detail;
+          const idx = parseInt(edgeId);
+          const edge = currentLayout?.edges?.[idx];
+          if (!edge || !edge.points || edge.points.length <= 2) return;
+          pushHistory();
+          edge.points.splice(wpIdx, 1);
+          const edgeEls = svgEl.querySelectorAll('.cg-edge path');
+          if (edgeEls[idx]) {
+            const newPath = recalcEdgePath(currentLayout, edge);
+            if (newPath) edgeEls[idx].setAttribute('d', newPath);
+          }
+          refreshWaypoints();
+          $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
+          $('export-btn').dataset.svg = layoutToSVG(currentLayout, currentDSL, { darkMode: CONFIG.style.darkMode, width: CONFIG.style.canvasWidth || null, height: CONFIG.style.canvasHeight || null });
+          showStatus('ok', '<i class="fa-solid fa-circle-minus mr-1"></i>已删除拐点');
+        });
+        // 拐点选中变化：刷新工具栏 placeholder
+        svgEl.addEventListener('waypoint-select', () => {
+          if (selectedEdgeIdx !== null) showEdgeToolbar(selectedEdgeIdx);
+        });
       }
       // 启用保存/导出/基线按钮
       $('save-proj').disabled = false;
@@ -1719,7 +1797,10 @@
       // 刷新图层列表
       refreshLayerList();
       // 恢复选择模式状态（新 editor 实例需重新设置）
-      if (currentSVGEeditor) currentSVGEeditor.setPanMode(selectMode === 'pan');
+      if (currentSVGEeditor) {
+        currentSVGEeditor.setPanMode(selectMode === 'pan');
+        currentSVGEeditor.tagEdges();
+      }
       updateUndoRedoButtons();
       updateClipboardButtons();
     }
@@ -2019,10 +2100,7 @@
       if (!edge) return;
       pushHistory();
       edge.style = 'curve';
-      // 移除中间拐点（曲线不需要）
-      if (edge.points && edge.points.length > 2) {
-        edge.points = [edge.points[0], edge.points[edge.points.length - 1]];
-      }
+      // 曲线保留拐点（用 S 命令平滑连接）
       if (currentDSL) {
         const dslEdge = (currentDSL.edges || [])[selectedEdgeIdx];
         if (dslEdge) dslEdge.style = 'curve';
@@ -2036,8 +2114,8 @@
         }
       }
       refreshWaypoints();
+      showEdgeToolbar(selectedEdgeIdx);
       $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
-      // 同步导出用 SVG
       $('export-btn').dataset.svg = layoutToSVG(currentLayout, currentDSL, { darkMode: CONFIG.style.darkMode, width: CONFIG.style.canvasWidth || null, height: CONFIG.style.canvasHeight || null });
       showStatus('ok', '<i class="fa-solid fa-bezier-curve mr-1"></i>已切换为曲线');
     });
@@ -2062,8 +2140,8 @@
         }
       }
       refreshWaypoints();
+      showEdgeToolbar(selectedEdgeIdx);
       $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
-      // 同步导出用 SVG
       $('export-btn').dataset.svg = layoutToSVG(currentLayout, currentDSL, { darkMode: CONFIG.style.darkMode, width: CONFIG.style.canvasWidth || null, height: CONFIG.style.canvasHeight || null });
       showStatus('ok', '<i class="fa-solid fa-minus mr-1"></i>已切换为直线');
     });
@@ -2100,43 +2178,23 @@
       showStatus('ok', '<i class="fa-solid fa-circle-plus mr-1"></i>已添加拐点（可拖拽移动，双击删除）');
     });
 
-    // 边编辑：删除拐点（双击拐点 handle 删除）
-    // 此功能在 svg-editor 的 waypoint dblclick 中实现，这里提供按钮删除最后一个拐点
+    // 边编辑：删除选中的拐点（无选中则删除最后一个）
     $('edge-del-waypoint').addEventListener('click', () => {
       if (selectedEdgeIdx === null || !currentLayout) return;
       const edge = currentLayout.edges[selectedEdgeIdx];
       if (!edge || !edge.points || edge.points.length <= 2) return;
       pushHistory();
-      // 删除最后一个中间拐点
-      edge.points.splice(edge.points.length - 2, 1);
+      // 优先删除选中的拐点，否则删除最后一个中间拐点
+      const selWp = currentSVGEeditor ? currentSVGEeditor.getSelectedWaypoint() : null;
+      const delIdx = (selWp !== null && selWp > 0 && selWp < edge.points.length - 1) ? selWp : edge.points.length - 2;
+      edge.points.splice(delIdx, 1);
+      if (currentSVGEeditor) currentSVGEeditor.clearWaypointSelection();
       const svg = $('canvas').querySelector('svg');
       if (svg) {
         const edgeEls = svg.querySelectorAll('.cg-edge path');
         if (edgeEls[selectedEdgeIdx]) {
           const newPath = recalcEdgePath(currentLayout, edge);
           if (newPath) edgeEls[selectedEdgeIdx].setAttribute('d', newPath);
-        }
-      }
-      refreshWaypoints();
-      $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
-      $('export-btn').dataset.svg = layoutToSVG(currentLayout, currentDSL, { darkMode: CONFIG.style.darkMode, width: CONFIG.style.canvasWidth || null, height: CONFIG.style.canvasHeight || null });
-      showStatus('ok', '<i class="fa-solid fa-circle-minus mr-1"></i>已删除拐点');
-    });
-
-    // 双击拐点删除
-    svgEl.addEventListener('waypoint-remove', e => {
-      const { edgeId, wpIdx } = e.detail;
-      const idx = parseInt(edgeId);
-      const edge = currentLayout?.edges?.[idx];
-      if (!edge || !edge.points || edge.points.length <= 2) return;
-      pushHistory();
-      edge.points.splice(wpIdx, 1);
-      const svg = $('canvas').querySelector('svg');
-      if (svg) {
-        const edgeEls = svg.querySelectorAll('.cg-edge path');
-        if (edgeEls[idx]) {
-          const newPath = recalcEdgePath(currentLayout, edge);
-          if (newPath) edgeEls[idx].setAttribute('d', newPath);
         }
       }
       refreshWaypoints();
@@ -2163,10 +2221,53 @@
           edgeEls[selectedEdgeIdx].setAttribute('stroke-dasharray', edge.dashed ? '6 4' : 'none');
         }
       }
+      showEdgeToolbar(selectedEdgeIdx);
       $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
       $('export-btn').dataset.svg = layoutToSVG(currentLayout, currentDSL, { darkMode: CONFIG.style.darkMode, width: CONFIG.style.canvasWidth || null, height: CONFIG.style.canvasHeight || null });
       showStatus('ok', '<i class="fa-solid fa-grip-lines mr-1"></i>' + (edge.dashed ? '已切换为虚线' : '已切换为实线'));
     });
+
+    // 边编辑：拐点文字标签（绑定到选中态的拐点）
+    let edgeLabelTimer = null;
+    $('edge-label').addEventListener('input', () => {
+      if (selectedEdgeIdx === null || !currentLayout) return;
+      const edge = currentLayout.edges[selectedEdgeIdx];
+      if (!edge) return;
+      edge.label = $('edge-label').value;
+      // 绑定到当前选中的拐点（labelWpIdx），无选中则默认第一个拐点
+      if (edge.label && currentSVGEeditor) {
+        const selWp = currentSVGEeditor.getSelectedWaypoint();
+        if (selWp !== null) {
+          edge.labelWpIdx = selWp;
+        } else if (edge.labelWpIdx == null && edge.points && edge.points.length > 2) {
+          edge.labelWpIdx = 1;
+        }
+      }
+      if (currentDSL) {
+        const dslEdge = (currentDSL.edges || [])[selectedEdgeIdx];
+        if (dslEdge) {
+          dslEdge.label = edge.label;
+          if (edge.labelWpIdx != null) dslEdge.labelWpIdx = edge.labelWpIdx;
+        }
+      }
+      $('dsl-output').textContent = JSON.stringify(currentDSL, null, 2);
+      // 防抖重新渲染边（需更新 label rect/text）
+      if (edgeLabelTimer) clearTimeout(edgeLabelTimer);
+      edgeLabelTimer = setTimeout(() => {
+        const savedVB = currentSVGEeditor ? currentSVGEeditor.getTransform().viewBox : null;
+        renderResult(currentLayout, currentDSL);
+        if (savedVB && currentSVGEeditor) currentSVGEeditor.fitTo(savedVB);
+        if (currentSVGEeditor) currentSVGEeditor.tagEdges();
+        if (selectedEdgeIdx !== null) {
+          currentSVGEeditor.selectEdge(String(selectedEdgeIdx));
+          refreshWaypoints();
+          showEdgeToolbar(selectedEdgeIdx);
+        }
+        $('export-btn').dataset.svg = layoutToSVG(currentLayout, currentDSL, { darkMode: CONFIG.style.darkMode, width: CONFIG.style.canvasWidth || null, height: CONFIG.style.canvasHeight || null });
+      }, 300);
+    });
+    // 阻止 input 的 mousedown 冒泡到画布
+    $('edge-label').addEventListener('mousedown', e => e.stopPropagation());
 
     // 边编辑：删除选中的边
     $('edge-delete').addEventListener('click', () => {
@@ -2194,12 +2295,7 @@
         }
       }
       selectedEdgeIdx = null;
-      $('edge-curve').disabled = true;
-      $('edge-line').disabled = true;
-      $('edge-add-waypoint').disabled = true;
-      $('edge-del-waypoint').disabled = true;
-      $('edge-dashed').disabled = true;
-      $('edge-delete').disabled = true;
+      $('edge-toolbar').classList.remove('active');
       if (currentSVGEeditor) {
         currentSVGEeditor.clearWaypoints();
         currentSVGEeditor.tagEdges();
