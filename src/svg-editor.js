@@ -202,6 +202,7 @@ export function initSVGEditor(svg, options = {}) {
     // - 平移模式 + 右键 → 框选（派发事件给外部）
     if (e.button === 2) {
       e.preventDefault();
+      e.stopPropagation();
       if (panMode) {
         // 平移模式下右键 → 派发 right-mouse-select 事件，由外部启动框选
         svgEl.dispatchEvent(new CustomEvent('right-mouse-select', { detail: { clientX: e.clientX, clientY: e.clientY } }));
